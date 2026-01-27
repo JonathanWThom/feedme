@@ -56,12 +56,13 @@ type Model struct {
 	comments    []*api.Comment
 	cursor      int
 	offset      int
-	loading     bool
-	err         error
-	showHelp    bool
-	width       int
-	height      int
-	currentItem *api.Item
+	loading      bool
+	err          error
+	showHelp     bool
+	mouseEnabled bool
+	width        int
+	height       int
+	currentItem  *api.Item
 }
 
 // New creates a new Model
@@ -75,13 +76,14 @@ func New() Model {
 	h.Styles.ShortDesc = HelpStyle
 
 	return Model{
-		client:  api.NewClient(),
-		keys:    DefaultKeyMap(),
-		help:    h,
-		spinner: s,
-		view:    StoriesView,
-		feed:    0,
-		loading: true,
+		client:       api.NewClient(),
+		keys:         DefaultKeyMap(),
+		help:         h,
+		spinner:      s,
+		view:         StoriesView,
+		feed:         0,
+		loading:      true,
+		mouseEnabled: true,
 	}
 }
 
@@ -251,6 +253,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.storyIDs = nil
 			m.cursor = 0
 			return m, tea.Batch(m.spinner.Tick, m.loadStoryIDs())
+
+		case key.Matches(msg, m.keys.ToggleMouse):
+			m.mouseEnabled = !m.mouseEnabled
+			if m.mouseEnabled {
+				return m, tea.EnableMouseCellMotion
+			}
+			return m, tea.DisableMouse
 		}
 
 	case tea.WindowSizeMsg:
@@ -504,13 +513,18 @@ func (m Model) renderComment(c *api.Comment) string {
 func (m Model) renderStatusBar() string {
 	var left, right string
 
+	mouseStatus := ""
+	if !m.mouseEnabled {
+		mouseStatus = " [SELECT MODE - m to exit]"
+	}
+
 	switch m.view {
 	case StoriesView:
-		left = fmt.Sprintf(" %d/%d stories", m.cursor+1, len(m.stories))
-		right = "↑↓:nav  enter:open  c:comments  tab:feed  ?:help  q:quit "
+		left = fmt.Sprintf(" %d/%d stories%s", m.cursor+1, len(m.stories), mouseStatus)
+		right = "↑↓:nav  enter:open  c:comments  tab:feed  m:select  ?:help  q:quit "
 	case CommentsView:
-		left = fmt.Sprintf(" %d comments", len(m.comments))
-		right = "↑↓:scroll  o:open link  b:back  ?:help  q:quit "
+		left = fmt.Sprintf(" %d comments%s", len(m.comments), mouseStatus)
+		right = "↑↓:scroll  o:open link  b:back  m:select  ?:help  q:quit "
 	}
 
 	gap := m.width - lipgloss.Width(left) - lipgloss.Width(right)

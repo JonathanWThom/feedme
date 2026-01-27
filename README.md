@@ -85,6 +85,7 @@ hn
 | `Tab` / `l` | Next feed |
 | `Shift+Tab` / `h` | Previous feed |
 | `r` | Refresh |
+| `m` | Toggle select mode (to copy text) |
 | `?` | Toggle help |
 | `q` | Quit |
 
