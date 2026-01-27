@@ -1,4 +1,4 @@
-module github.com/jonathanthom/hn
+module github.com/JonathanWThom/hn
 
 go 1.25.6
 

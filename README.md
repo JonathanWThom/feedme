@@ -7,13 +7,13 @@ A terminal UI for [Hacker News](https://news.ycombinator.com).
 ### With Go
 
 ```bash
-go install github.com/jonathanthom/hn@latest
+go install github.com/JonathanWThom/hn@latest
 ```
 
 ### From Source
 
 ```bash
-git clone https://github.com/jonathanthom/hn.git
+git clone https://github.com/JonathanWThom/hn.git
 cd hn
 make install
 ```

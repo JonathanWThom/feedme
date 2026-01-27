@@ -2,9 +2,9 @@
 set -e
 
 # HN TUI Installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/jonathanthom/hn/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/JonathanWThom/hn/main/install.sh | bash
 
-REPO="jonathanthom/hn"
+REPO="JonathanWThom/hn"
 BINARY_NAME="hn"
 INSTALL_DIR="/usr/local/bin"
 
