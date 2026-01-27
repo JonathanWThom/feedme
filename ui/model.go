@@ -193,15 +193,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case key.Matches(msg, m.keys.Enter), key.Matches(msg, m.keys.Open):
+			var story *api.Item
 			if m.view == StoriesView && len(m.stories) > 0 {
-				story := m.stories[m.cursor]
-				if story != nil && story.URL != "" {
-					_ = browser.OpenURL(story.URL)
-				} else if story != nil {
-					// For Ask HN, Show HN, etc. - open the HN page
-					url := fmt.Sprintf("https://news.ycombinator.com/item?id=%d", story.ID)
-					_ = browser.OpenURL(url)
-				}
+				story = m.stories[m.cursor]
+			} else if m.view == CommentsView {
+				story = m.currentItem
+			}
+			if story != nil && story.URL != "" {
+				_ = browser.OpenURL(story.URL)
+			} else if story != nil {
+				// For Ask HN, Show HN, etc. - open the HN page
+				url := fmt.Sprintf("https://news.ycombinator.com/item?id=%d", story.ID)
+				_ = browser.OpenURL(url)
 			}
 
 		case key.Matches(msg, m.keys.Comments):
@@ -507,7 +510,7 @@ func (m Model) renderStatusBar() string {
 		right = "↑↓:nav  enter:open  c:comments  tab:feed  ?:help  q:quit "
 	case CommentsView:
 		left = fmt.Sprintf(" %d comments", len(m.comments))
-		right = "↑↓:scroll  b:back  ?:help  q:quit "
+		right = "↑↓:scroll  o:open link  b:back  ?:help  q:quit "
 	}
 
 	gap := m.width - lipgloss.Width(left) - lipgloss.Width(right)
