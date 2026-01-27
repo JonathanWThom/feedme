@@ -27,10 +27,11 @@ esac
 
 case "$OS" in
     darwin|linux)
+        EXT="tar.gz"
         ;;
     mingw*|msys*|cygwin*)
         OS="windows"
-        BINARY_NAME="hn.exe"
+        EXT="zip"
         ;;
     *)
         echo "Unsupported OS: $OS"
@@ -38,22 +39,27 @@ case "$OS" in
         ;;
 esac
 
-# Get latest release
+# Get latest release tag
 echo "Detecting latest release..."
 LATEST=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
 
 if [ -z "$LATEST" ]; then
-    echo "Could not detect latest release. Using 'main' branch."
-    LATEST="main"
+    echo "Could not detect latest release."
+    echo ""
+    echo "Alternative installation methods:"
+    echo ""
+    echo "1. Install with Go:"
+    echo "   go install github.com/$REPO@latest"
+    echo ""
+    echo "2. Build from source:"
+    echo "   git clone https://github.com/$REPO.git"
+    echo "   cd hn && go build -o hn . && sudo mv hn /usr/local/bin/"
+    echo ""
+    exit 1
 fi
 
-# Download URL
-if [ "$OS" = "windows" ]; then
-    FILENAME="${BINARY_NAME%.*}-${OS}-${ARCH}.exe"
-else
-    FILENAME="hn-${OS}-${ARCH}"
-fi
-
+# Download URL (matches goreleaser naming: hn_darwin_arm64.tar.gz)
+FILENAME="hn_${OS}_${ARCH}.${EXT}"
 DOWNLOAD_URL="https://github.com/$REPO/releases/download/$LATEST/$FILENAME"
 
 echo "Downloading $BINARY_NAME $LATEST for $OS/$ARCH..."
@@ -63,10 +69,10 @@ echo "URL: $DOWNLOAD_URL"
 TMP_DIR=$(mktemp -d)
 trap "rm -rf $TMP_DIR" EXIT
 
-# Download binary
-if ! curl -fsSL "$DOWNLOAD_URL" -o "$TMP_DIR/$BINARY_NAME"; then
+# Download archive
+if ! curl -fsSL "$DOWNLOAD_URL" -o "$TMP_DIR/$FILENAME"; then
     echo ""
-    echo "Download failed. Release may not exist yet."
+    echo "Download failed."
     echo ""
     echo "Alternative installation methods:"
     echo ""
@@ -75,13 +81,18 @@ if ! curl -fsSL "$DOWNLOAD_URL" -o "$TMP_DIR/$BINARY_NAME"; then
     echo ""
     echo "2. Build from source:"
     echo "   git clone https://github.com/$REPO.git"
-    echo "   cd hn && make install"
+    echo "   cd hn && go build -o hn . && sudo mv hn /usr/local/bin/"
     echo ""
     exit 1
 fi
 
-# Make executable
-chmod +x "$TMP_DIR/$BINARY_NAME"
+# Extract
+cd "$TMP_DIR"
+if [ "$EXT" = "tar.gz" ]; then
+    tar xzf "$FILENAME"
+else
+    unzip -q "$FILENAME"
+fi
 
 # Install
 echo "Installing to $INSTALL_DIR..."
