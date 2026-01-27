@@ -107,6 +107,10 @@ fm -s lobsters
 - **New** - Newest stories
 - **Recent** - Recently active
 
+## Disclaimer
+
+This project was largely written with the assistance of AI (Claude). The code has been reviewed and tested, but use at your own discretion.
+
 ## License
 
-MIT
+MIT License - see [LICENSE](LICENSE) for details.
