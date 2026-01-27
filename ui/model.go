@@ -139,6 +139,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Up):
 			if m.view == StoriesView && m.cursor > 0 {
 				m.cursor--
+				m.adjustOffset()
 			} else if m.view == CommentsView {
 				m.viewport.LineUp(1)
 			}
@@ -146,6 +147,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Down):
 			if m.view == StoriesView && m.cursor < len(m.stories)-1 {
 				m.cursor++
+				m.adjustOffset()
 				// Load more stories if near the end
 				if m.cursor >= len(m.stories)-5 && len(m.storyIDs) > len(m.stories) {
 					nextBatch := m.storyIDs[len(m.stories):min(len(m.stories)+30, len(m.storyIDs))]
@@ -161,6 +163,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.PageDown):
 			if m.view == StoriesView {
 				m.cursor = min(m.cursor+10, len(m.stories)-1)
+				m.adjustOffset()
 			} else {
 				m.viewport.HalfViewDown()
 			}
@@ -168,6 +171,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.PageUp):
 			if m.view == StoriesView {
 				m.cursor = max(m.cursor-10, 0)
+				m.adjustOffset()
 			} else {
 				m.viewport.HalfViewUp()
 			}
@@ -175,6 +179,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Home):
 			if m.view == StoriesView {
 				m.cursor = 0
+				m.offset = 0
 			} else {
 				m.viewport.GotoTop()
 			}
@@ -182,6 +187,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.End):
 			if m.view == StoriesView {
 				m.cursor = len(m.stories) - 1
+				m.adjustOffset()
 			} else {
 				m.viewport.GotoBottom()
 			}
@@ -290,6 +296,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+// adjustOffset ensures the cursor is visible within the viewport
+func (m *Model) adjustOffset() {
+	visibleCount := m.visibleStoryCount()
+	if m.cursor < m.offset {
+		m.offset = m.cursor
+	} else if m.cursor >= m.offset+visibleCount {
+		m.offset = m.cursor - visibleCount + 1
+	}
+	if m.offset < 0 {
+		m.offset = 0
+	}
+}
+
+// visibleStoryCount returns how many stories fit on screen
+func (m Model) visibleStoryCount() int {
+	// Each story takes 2 lines, account for header (2 lines) and status bar (1 line)
+	availableLines := m.height - 3
+	count := availableLines / 2
+	if count < 1 {
+		return 1
+	}
+	return count
+}
+
 // View renders the model
 func (m Model) View() string {
 	if m.width == 0 {
@@ -348,13 +378,8 @@ func (m Model) renderStories() string {
 	}
 
 	var b strings.Builder
-	visibleCount := m.height - 5 // Account for header, status bar, etc.
-
-	// Calculate visible range
-	start := 0
-	if m.cursor >= visibleCount {
-		start = m.cursor - visibleCount + 1
-	}
+	visibleCount := m.visibleStoryCount()
+	start := m.offset
 	end := min(start+visibleCount, len(m.stories))
 
 	for i := start; i < end; i++ {
