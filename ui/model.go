@@ -12,7 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/JonathanWThom/hn/api"
+	"github.com/JonathanWThom/feedme/api"
 	"github.com/pkg/browser"
 )
 
@@ -42,7 +42,7 @@ type storyIDsLoadedMsg struct {
 
 // Model is the main application model
 type Model struct {
-	client   *api.Client
+	source   api.Source
 	keys     KeyMap
 	help     help.Model
 	spinner  spinner.Model
@@ -65,8 +65,13 @@ type Model struct {
 	currentItem  *api.Item
 }
 
-// New creates a new Model
+// New creates a new Model with the default HN source
 func New() Model {
+	return NewWithSource(api.NewClient())
+}
+
+// NewWithSource creates a new Model with a specific source
+func NewWithSource(source api.Source) Model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = SpinnerStyle
@@ -76,7 +81,7 @@ func New() Model {
 	h.Styles.ShortDesc = HelpStyle
 
 	return Model{
-		client:       api.NewClient(),
+		source:       source,
 		keys:         DefaultKeyMap(),
 		help:         h,
 		spinner:      s,
@@ -96,23 +101,24 @@ func (m Model) Init() tea.Cmd {
 }
 
 func (m Model) loadStoryIDs() tea.Cmd {
-	feed := api.FeedNames[m.feed]
+	feedNames := m.source.FeedNames()
+	feed := feedNames[m.feed]
 	return func() tea.Msg {
-		ids, err := m.client.FetchStoryIDs(feed)
+		ids, err := m.source.FetchStoryIDs(feed)
 		return storyIDsLoadedMsg{ids: ids, err: err}
 	}
 }
 
 func (m Model) loadStories(ids []int) tea.Cmd {
 	return func() tea.Msg {
-		stories, err := m.client.FetchItems(ids)
+		stories, err := m.source.FetchItems(ids)
 		return storiesLoadedMsg{stories: stories, err: err}
 	}
 }
 
 func (m Model) loadComments(item *api.Item) tea.Cmd {
 	return func() tea.Msg {
-		comments, err := m.client.FetchCommentTree(item, 0)
+		comments, err := m.source.FetchCommentTree(item, 0)
 		return commentsLoadedMsg{comments: comments, err: err}
 	}
 }
@@ -204,8 +210,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if story != nil && story.URL != "" {
 				_ = browser.OpenURL(story.URL)
 			} else if story != nil {
-				// For Ask HN, Show HN, etc. - open the HN page
-				url := fmt.Sprintf("https://news.ycombinator.com/item?id=%d", story.ID)
+				// For Ask HN, Show HN, etc. - open the source's page
+				url := m.source.StoryURL(story)
 				_ = browser.OpenURL(url)
 			}
 
@@ -229,20 +235,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, m.keys.NextTab):
 			if m.view == StoriesView {
-				m.feed = (m.feed + 1) % len(api.FeedNames)
+				feedNames := m.source.FeedNames()
+				m.feed = (m.feed + 1) % len(feedNames)
 				m.stories = nil
 				m.storyIDs = nil
 				m.cursor = 0
+				m.offset = 0
+				m.err = nil
 				m.loading = true
 				return m, tea.Batch(m.spinner.Tick, m.loadStoryIDs())
 			}
 
 		case key.Matches(msg, m.keys.PrevTab):
 			if m.view == StoriesView {
-				m.feed = (m.feed - 1 + len(api.FeedNames)) % len(api.FeedNames)
+				feedNames := m.source.FeedNames()
+				m.feed = (m.feed - 1 + len(feedNames)) % len(feedNames)
 				m.stories = nil
 				m.storyIDs = nil
 				m.cursor = 0
+				m.offset = 0
+				m.err = nil
 				m.loading = true
 				return m, tea.Batch(m.spinner.Tick, m.loadStoryIDs())
 			}
@@ -252,6 +264,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.stories = nil
 			m.storyIDs = nil
 			m.cursor = 0
+			m.offset = 0
+			m.err = nil
 			return m, tea.Batch(m.spinner.Tick, m.loadStoryIDs())
 
 		case key.Matches(msg, m.keys.ToggleMouse):
@@ -290,8 +304,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.err = msg.err
 		} else {
-			// Append to existing stories
-			m.stories = append(m.stories, msg.stories...)
+			// Append non-nil stories
+			for _, s := range msg.stories {
+				if s != nil {
+					m.stories = append(m.stories, s)
+				}
+			}
 		}
 
 	case commentsLoadedMsg:
@@ -368,10 +386,10 @@ func (m Model) View() string {
 }
 
 func (m Model) renderHeader() string {
-	title := HeaderStyle.Render(" HN ")
+	title := HeaderStyle.Render(" " + m.source.Name() + " ")
 
 	var tabs []string
-	feedLabels := []string{"Top", "New", "Best", "Ask", "Show"}
+	feedLabels := m.source.FeedLabels()
 	for i, label := range feedLabels {
 		if i == m.feed {
 			tabs = append(tabs, ActiveTabStyle.Render(label))
@@ -437,9 +455,16 @@ func (m Model) renderStory(idx int, story *api.Item, selected bool) string {
 	}
 	b.WriteString("\n")
 
-	// Meta line
-	meta := fmt.Sprintf("      %d points by %s %s | %d comments",
-		story.Score, story.By, story.TimeAgo(), story.Descendants)
+	// Meta line - include tags if present (for Lobste.rs)
+	var meta string
+	if story.Text != "" && strings.HasPrefix(story.Text, "[") {
+		// Has tags (Lobste.rs style)
+		meta = fmt.Sprintf("      %d points by %s %s | %d comments %s",
+			story.Score, story.By, story.TimeAgo(), story.Descendants, story.Text)
+	} else {
+		meta = fmt.Sprintf("      %d points by %s %s | %d comments",
+			story.Score, story.By, story.TimeAgo(), story.Descendants)
+	}
 	b.WriteString(MetaStyle.Render(meta))
 	b.WriteString("\n")
 

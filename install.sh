@@ -1,11 +1,11 @@
 #!/bin/bash
 set -e
 
-# HN TUI Installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/JonathanWThom/hn/main/install.sh | bash
+# feedme Installer
+# Usage: curl -fsSL https://raw.githubusercontent.com/JonathanWThom/feedme/main/install.sh | bash
 
-REPO="JonathanWThom/hn"
-BINARY_NAME="hn"
+REPO="JonathanWThom/feedme"
+BINARY_NAME="fm"
 INSTALL_DIR="${HOME}/.local/bin"
 
 # Detect OS and architecture
@@ -32,7 +32,7 @@ case "$OS" in
     mingw*|msys*|cygwin*)
         OS="windows"
         EXT="zip"
-        BINARY_NAME="hn.exe"
+        BINARY_NAME="fm.exe"
         ;;
     *)
         echo "Unsupported OS: $OS"
@@ -54,13 +54,13 @@ if [ -z "$LATEST" ]; then
     echo ""
     echo "2. Build from source:"
     echo "   git clone https://github.com/$REPO.git"
-    echo "   cd hn && go build -o hn ."
+    echo "   cd feedme && go build -o fm ."
     echo ""
     exit 1
 fi
 
-# Download URL (matches goreleaser naming: hn_darwin_arm64.tar.gz)
-FILENAME="hn_${OS}_${ARCH}.${EXT}"
+# Download URL (matches goreleaser naming: fm_darwin_arm64.tar.gz)
+FILENAME="fm_${OS}_${ARCH}.${EXT}"
 DOWNLOAD_URL="https://github.com/$REPO/releases/download/$LATEST/$FILENAME"
 
 echo "Downloading $BINARY_NAME $LATEST for $OS/$ARCH..."
@@ -82,7 +82,7 @@ if ! curl -fsSL "$DOWNLOAD_URL" -o "$TMP_DIR/$FILENAME"; then
     echo ""
     echo "2. Build from source:"
     echo "   git clone https://github.com/$REPO.git"
-    echo "   cd hn && go build -o hn ."
+    echo "   cd feedme && go build -o fm ."
     echo ""
     exit 1
 fi
@@ -120,4 +120,6 @@ if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
 fi
 
 echo ""
-echo "Run 'hn' to start browsing Hacker News!"
+echo "Run 'fm' to start browsing tech news!"
+echo "  fm           - Browse Hacker News"
+echo "  fm -s lobsters - Browse Lobste.rs"

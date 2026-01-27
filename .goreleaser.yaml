@@ -1,6 +1,6 @@
 version: 2
 
-project_name: hn
+project_name: fm
 
 before:
   hooks:
@@ -36,4 +36,3 @@ changelog:
       - '^docs:'
       - '^test:'
       - '^chore:'
-

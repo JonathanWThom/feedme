@@ -119,6 +119,26 @@ func NewClient() *Client {
 	}
 }
 
+// Name returns the display name of the source
+func (c *Client) Name() string {
+	return "HN"
+}
+
+// FeedNames returns the available feed names
+func (c *Client) FeedNames() []string {
+	return FeedNames
+}
+
+// FeedLabels returns the display labels for feeds
+func (c *Client) FeedLabels() []string {
+	return []string{"Top", "New", "Best", "Ask", "Show"}
+}
+
+// StoryURL returns the URL for viewing a story on HN
+func (c *Client) StoryURL(item *Item) string {
+	return fmt.Sprintf("https://news.ycombinator.com/item?id=%d", item.ID)
+}
+
 // FetchStoryIDs fetches the list of story IDs for a given feed
 func (c *Client) FetchStoryIDs(feed string) ([]int, error) {
 	url := fmt.Sprintf("%s/%s.json", baseURL, feed)
