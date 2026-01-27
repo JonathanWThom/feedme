@@ -4,6 +4,28 @@ A terminal UI for [Hacker News](https://news.ycombinator.com).
 
 ## Installation
 
+### Download Binary (Recommended)
+
+Download the latest release for your platform from the [releases page](https://github.com/JonathanWThom/hn/releases).
+
+```bash
+# macOS (Apple Silicon)
+curl -L https://github.com/JonathanWThom/hn/releases/latest/download/hn_Darwin_arm64.tar.gz | tar xz
+sudo mv hn /usr/local/bin/
+
+# macOS (Intel)
+curl -L https://github.com/JonathanWThom/hn/releases/latest/download/hn_Darwin_amd64.tar.gz | tar xz
+sudo mv hn /usr/local/bin/
+
+# Linux (amd64)
+curl -L https://github.com/JonathanWThom/hn/releases/latest/download/hn_Linux_amd64.tar.gz | tar xz
+sudo mv hn /usr/local/bin/
+
+# Linux (arm64)
+curl -L https://github.com/JonathanWThom/hn/releases/latest/download/hn_Linux_arm64.tar.gz | tar xz
+sudo mv hn /usr/local/bin/
+```
+
 ### With Go
 
 ```bash
@@ -15,7 +37,8 @@ go install github.com/JonathanWThom/hn@latest
 ```bash
 git clone https://github.com/JonathanWThom/hn.git
 cd hn
-make install
+go build -o hn .
+sudo mv hn /usr/local/bin/
 ```
 
 ## Usage
