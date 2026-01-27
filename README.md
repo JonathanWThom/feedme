@@ -10,19 +10,19 @@ Download the latest release for your platform from the [releases page](https://g
 
 ```bash
 # macOS (Apple Silicon)
-curl -L https://github.com/JonathanWThom/hn/releases/latest/download/hn_Darwin_arm64.tar.gz | tar xz
+curl -L https://github.com/JonathanWThom/hn/releases/latest/download/hn_darwin_arm64.tar.gz | tar xz
 sudo mv hn /usr/local/bin/
 
 # macOS (Intel)
-curl -L https://github.com/JonathanWThom/hn/releases/latest/download/hn_Darwin_amd64.tar.gz | tar xz
+curl -L https://github.com/JonathanWThom/hn/releases/latest/download/hn_darwin_amd64.tar.gz | tar xz
 sudo mv hn /usr/local/bin/
 
 # Linux (amd64)
-curl -L https://github.com/JonathanWThom/hn/releases/latest/download/hn_Linux_amd64.tar.gz | tar xz
+curl -L https://github.com/JonathanWThom/hn/releases/latest/download/hn_linux_amd64.tar.gz | tar xz
 sudo mv hn /usr/local/bin/
 
 # Linux (arm64)
-curl -L https://github.com/JonathanWThom/hn/releases/latest/download/hn_Linux_arm64.tar.gz | tar xz
+curl -L https://github.com/JonathanWThom/hn/releases/latest/download/hn_linux_arm64.tar.gz | tar xz
 sudo mv hn /usr/local/bin/
 ```
 
