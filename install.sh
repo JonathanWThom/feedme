@@ -6,7 +6,7 @@ set -e
 
 REPO="JonathanWThom/hn"
 BINARY_NAME="hn"
-INSTALL_DIR="/usr/local/bin"
+INSTALL_DIR="${HOME}/.local/bin"
 
 # Detect OS and architecture
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -32,6 +32,7 @@ case "$OS" in
     mingw*|msys*|cygwin*)
         OS="windows"
         EXT="zip"
+        BINARY_NAME="hn.exe"
         ;;
     *)
         echo "Unsupported OS: $OS"
@@ -53,7 +54,7 @@ if [ -z "$LATEST" ]; then
     echo ""
     echo "2. Build from source:"
     echo "   git clone https://github.com/$REPO.git"
-    echo "   cd hn && go build -o hn . && sudo mv hn /usr/local/bin/"
+    echo "   cd hn && go build -o hn ."
     echo ""
     exit 1
 fi
@@ -81,7 +82,7 @@ if ! curl -fsSL "$DOWNLOAD_URL" -o "$TMP_DIR/$FILENAME"; then
     echo ""
     echo "2. Build from source:"
     echo "   git clone https://github.com/$REPO.git"
-    echo "   cd hn && go build -o hn . && sudo mv hn /usr/local/bin/"
+    echo "   cd hn && go build -o hn ."
     echo ""
     exit 1
 fi
@@ -94,14 +95,29 @@ else
     unzip -q "$FILENAME"
 fi
 
+# Create install directory if needed
+mkdir -p "$INSTALL_DIR"
+
 # Install
-echo "Installing to $INSTALL_DIR..."
-if [ -w "$INSTALL_DIR" ]; then
-    mv "$TMP_DIR/$BINARY_NAME" "$INSTALL_DIR/"
-else
-    sudo mv "$TMP_DIR/$BINARY_NAME" "$INSTALL_DIR/"
-fi
+mv "$TMP_DIR/$BINARY_NAME" "$INSTALL_DIR/"
 
 echo ""
 echo "Successfully installed $BINARY_NAME to $INSTALL_DIR/$BINARY_NAME"
+
+# Check if install dir is in PATH
+if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+    echo ""
+    echo "NOTE: $INSTALL_DIR is not in your PATH."
+    echo "Add it by running:"
+    echo ""
+    echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc"
+    echo "  source ~/.bashrc"
+    echo ""
+    echo "Or for zsh:"
+    echo ""
+    echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc"
+    echo "  source ~/.zshrc"
+fi
+
+echo ""
 echo "Run 'hn' to start browsing Hacker News!"
