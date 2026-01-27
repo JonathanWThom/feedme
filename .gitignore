@@ -1,0 +1,16 @@
+# Binary
+hn
+hn.exe
+
+# Build artifacts
+dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
