@@ -359,6 +359,7 @@ func (m Model) View() string {
 	var b strings.Builder
 
 	// Header with tabs
+	b.WriteString("\n")
 	b.WriteString(m.renderHeader())
 	b.WriteString("\n")
 
