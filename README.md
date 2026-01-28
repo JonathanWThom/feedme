@@ -14,24 +14,26 @@ curl -fsSL https://raw.githubusercontent.com/JonathanWThom/feedme/main/install.s
 
 Download the latest release for your platform from the [releases page](https://github.com/JonathanWThom/feedme/releases).
 
-**macOS:**
+**macOS (Apple Silicon):**
 ```bash
-# Apple Silicon
 curl -L https://github.com/JonathanWThom/feedme/releases/latest/download/fm_darwin_arm64.tar.gz | tar xz
 mv fm ~/.local/bin/
+```
 
-# Intel
+**macOS (Intel):**
+```bash
 curl -L https://github.com/JonathanWThom/feedme/releases/latest/download/fm_darwin_amd64.tar.gz | tar xz
 mv fm ~/.local/bin/
 ```
 
-**Linux:**
+**Linux (amd64):**
 ```bash
-# amd64
 curl -L https://github.com/JonathanWThom/feedme/releases/latest/download/fm_linux_amd64.tar.gz | tar xz
 mv fm ~/.local/bin/
+```
 
-# arm64
+**Linux (arm64):**
+```bash
 curl -L https://github.com/JonathanWThom/feedme/releases/latest/download/fm_linux_arm64.tar.gz | tar xz
 mv fm ~/.local/bin/
 ```
@@ -107,10 +109,6 @@ fm -s lobsters
 - **New** - Newest stories
 - **Recent** - Recently active
 
-## Disclaimer
-
-This project was largely written with the assistance of AI (Claude). The code has been reviewed and tested, but use at your own discretion.
-
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT
