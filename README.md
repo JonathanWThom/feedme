@@ -124,6 +124,12 @@ You can also switch sources from within the app by pressing `s`.
 - **Rising** - Rising posts
 - **Best** - Best posts
 
+## Disclaimer
+
+This project was largely "vibe coded" with [Claude Code](https://claude.ai/claude-code) for my own amusement and procrastination needs. I mass-approved mass-generated code with the mass-confidence of someone who definitely didn't read all of it. Use at your own risk. Side effects may include: unexpected bugs, questionable architectural decisions, and the nagging feeling that an AI had more fun writing this than you will debugging it.
+
+No warranty expressed or implied. Not responsible for lost productivity, existential dread about the future of software development, or any incidents involving your terminal catching fire (metaphorically).
+
 ## License
 
 MIT
