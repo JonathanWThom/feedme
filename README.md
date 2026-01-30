@@ -1,6 +1,6 @@
 # feedme
 
-A terminal UI for browsing [Hacker News](https://news.ycombinator.com) and [Lobste.rs](https://lobste.rs).
+A terminal UI for browsing [Hacker News](https://news.ycombinator.com), [Lobste.rs](https://lobste.rs), and [Reddit](https://reddit.com).
 
 ## Installation
 
@@ -77,6 +77,14 @@ fm
 
 # Browse Lobste.rs
 fm -s lobsters
+
+# Browse a subreddit
+fm -s r/golang
+
+# Browse any subreddit
+fm -s r/programming
+fm -s r/rust
+fm -s r/vim
 ```
 
 ## Keybindings
@@ -108,6 +116,13 @@ fm -s lobsters
 - **Hot** - Hottest stories
 - **New** - Newest stories
 - **Recent** - Recently active
+
+### Reddit (`-s r/subreddit`)
+- **Hot** - Hot posts (default)
+- **New** - Newest posts
+- **Top** - Top posts
+- **Rising** - Rising posts
+- **Best** - Best posts
 
 ## License
 

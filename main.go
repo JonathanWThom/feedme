@@ -13,19 +13,23 @@ import (
 
 func main() {
 	var sourceFlag string
-	flag.StringVar(&sourceFlag, "source", "hn", "News source to use: hn (Hacker News) or lobsters (Lobste.rs)")
-	flag.StringVar(&sourceFlag, "s", "hn", "News source to use (shorthand)")
+	flag.StringVar(&sourceFlag, "source", "hn", "News source: hn, lobsters, or r/subreddit (e.g., r/golang)")
+	flag.StringVar(&sourceFlag, "s", "hn", "News source (shorthand)")
 	flag.Parse()
 
 	var source api.Source
-	switch strings.ToLower(sourceFlag) {
-	case "hn", "hackernews", "hacker-news":
+	sourceLower := strings.ToLower(sourceFlag)
+
+	switch {
+	case sourceLower == "hn" || sourceLower == "hackernews" || sourceLower == "hacker-news":
 		source = api.NewClient()
-	case "lobsters", "lobste.rs", "l":
+	case sourceLower == "lobsters" || sourceLower == "lobste.rs" || sourceLower == "l":
 		source = api.NewLobstersClient()
+	case strings.HasPrefix(sourceLower, "r/") || strings.HasPrefix(sourceLower, "/r/"):
+		source = api.NewRedditClient(sourceFlag)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown source: %s\n", sourceFlag)
-		fmt.Fprintf(os.Stderr, "Valid sources: hn, lobsters\n")
+		fmt.Fprintf(os.Stderr, "Valid sources: hn, lobsters, r/subreddit\n")
 		os.Exit(1)
 	}
 

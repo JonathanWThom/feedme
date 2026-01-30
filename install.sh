@@ -120,6 +120,7 @@ if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
 fi
 
 echo ""
-echo "Run 'fm' to start browsing tech news!"
-echo "  fm           - Browse Hacker News"
-echo "  fm -s lobsters - Browse Lobste.rs"
+echo "Run 'fm' to start browsing!"
+echo "  fm              - Browse Hacker News"
+echo "  fm -s lobsters  - Browse Lobste.rs"
+echo "  fm -s r/golang  - Browse a subreddit"
