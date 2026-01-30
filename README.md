@@ -78,14 +78,13 @@ fm
 # Browse Lobste.rs
 fm -s lobsters
 
-# Browse a subreddit
-fm -s r/golang
-
 # Browse any subreddit
-fm -s r/programming
-fm -s r/rust
-fm -s r/vim
+fm -s r/golang
+fm -s r/bellingham
+fm -s r/seinfeld
 ```
+
+You can also switch sources from within the app by pressing `s`.
 
 ## Keybindings
 
@@ -93,11 +92,12 @@ fm -s r/vim
 |-----|--------|
 | `j` / `↓` | Move down |
 | `k` / `↑` | Move up |
-| `Enter` | Open link in browser |
+| `Enter` / `o` | Open link in browser |
 | `c` | View comments |
 | `b` / `Esc` | Back to stories |
 | `Tab` / `l` | Next feed |
 | `Shift+Tab` / `h` | Previous feed |
+| `s` | Switch source (HN, Lobste.rs, Reddit) |
 | `r` | Refresh |
 | `m` | Toggle select mode (to copy text) |
 | `?` | Toggle help |

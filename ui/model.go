@@ -22,6 +22,7 @@ type View int
 const (
 	StoriesView View = iota
 	CommentsView
+	SourcePickerView
 )
 
 // Messages
@@ -63,6 +64,11 @@ type Model struct {
 	width        int
 	height       int
 	currentItem  *api.Item
+
+	// Source picker state
+	sourcePickerCursor int
+	subredditInput     string
+	editingSubreddit   bool
 }
 
 // New creates a new Model with the default HN source
@@ -129,6 +135,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Handle source picker input
+		if m.view == SourcePickerView {
+			return m.handleSourcePickerInput(msg)
+		}
+
 		// Handle help toggle first
 		if key.Matches(msg, m.keys.Help) {
 			m.showHelp = !m.showHelp
@@ -274,6 +285,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.EnableMouseCellMotion
 			}
 			return m, tea.DisableMouse
+
+		case key.Matches(msg, m.keys.SwitchSource):
+			if m.view == StoriesView {
+				m.view = SourcePickerView
+				m.sourcePickerCursor = 0
+				m.subredditInput = ""
+				m.editingSubreddit = false
+				return m, nil
+			}
 		}
 
 	case tea.WindowSizeMsg:
@@ -376,6 +396,8 @@ func (m Model) View() string {
 			b.WriteString(m.renderStories())
 		case CommentsView:
 			b.WriteString(m.viewport.View())
+		case SourcePickerView:
+			b.WriteString(m.renderSourcePicker())
 		}
 	}
 
@@ -547,10 +569,13 @@ func (m Model) renderStatusBar() string {
 	switch m.view {
 	case StoriesView:
 		left = fmt.Sprintf(" %d/%d stories%s", m.cursor+1, len(m.stories), mouseStatus)
-		right = "↑↓:nav  enter:open  c:comments  tab:feed  m:select  ?:help  q:quit "
+		right = "↑↓:nav  enter:open  c:comments  tab:feed  s:source  ?:help  q:quit "
 	case CommentsView:
 		left = fmt.Sprintf(" %d comments%s", len(m.comments), mouseStatus)
-		right = "↑↓:scroll  o:open link  b:back  m:select  ?:help  q:quit "
+		right = "↑↓:scroll  o:open link  b:back  ?:help  q:quit "
+	case SourcePickerView:
+		left = " Select a source"
+		right = "↑↓:nav  enter:select  esc:cancel  q:quit "
 	}
 
 	gap := m.width - lipgloss.Width(left) - lipgloss.Width(right)
@@ -563,6 +588,132 @@ func (m Model) renderStatusBar() string {
 
 func (m Model) renderFullHelp() string {
 	return "\n" + m.help.FullHelpView(m.keys.FullHelp()) + "\n\nPress any key to close help."
+}
+
+// Source picker options
+var sourceOptions = []string{"Hacker News", "Lobste.rs", "Reddit"}
+
+// handleSourcePickerInput handles keyboard input in the source picker
+func (m Model) handleSourcePickerInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// If editing subreddit, handle text input
+	if m.editingSubreddit {
+		switch msg.Type {
+		case tea.KeyEnter:
+			if m.subredditInput != "" {
+				// Switch to the entered subreddit
+				m.source = api.NewRedditClient(m.subredditInput)
+				m.view = StoriesView
+				m.feed = 0
+				m.stories = nil
+				m.storyIDs = nil
+				m.cursor = 0
+				m.offset = 0
+				m.err = nil
+				m.loading = true
+				m.editingSubreddit = false
+				return m, tea.Batch(m.spinner.Tick, m.loadStoryIDs())
+			}
+		case tea.KeyEsc:
+			m.editingSubreddit = false
+			m.subredditInput = ""
+		case tea.KeyBackspace:
+			if len(m.subredditInput) > 0 {
+				m.subredditInput = m.subredditInput[:len(m.subredditInput)-1]
+			}
+		case tea.KeyRunes:
+			m.subredditInput += string(msg.Runes)
+		}
+		return m, nil
+	}
+
+	// Normal source picker navigation
+	switch {
+	case key.Matches(msg, m.keys.Quit):
+		return m, tea.Quit
+
+	case key.Matches(msg, m.keys.Up):
+		if m.sourcePickerCursor > 0 {
+			m.sourcePickerCursor--
+		}
+
+	case key.Matches(msg, m.keys.Down):
+		if m.sourcePickerCursor < len(sourceOptions)-1 {
+			m.sourcePickerCursor++
+		}
+
+	case key.Matches(msg, m.keys.Enter):
+		switch m.sourcePickerCursor {
+		case 0: // Hacker News
+			m.source = api.NewClient()
+			m.view = StoriesView
+			m.feed = 0
+			m.stories = nil
+			m.storyIDs = nil
+			m.cursor = 0
+			m.offset = 0
+			m.err = nil
+			m.loading = true
+			return m, tea.Batch(m.spinner.Tick, m.loadStoryIDs())
+		case 1: // Lobste.rs
+			m.source = api.NewLobstersClient()
+			m.view = StoriesView
+			m.feed = 0
+			m.stories = nil
+			m.storyIDs = nil
+			m.cursor = 0
+			m.offset = 0
+			m.err = nil
+			m.loading = true
+			return m, tea.Batch(m.spinner.Tick, m.loadStoryIDs())
+		case 2: // Reddit
+			m.editingSubreddit = true
+			m.subredditInput = ""
+		}
+
+	case key.Matches(msg, m.keys.Back):
+		m.view = StoriesView
+	}
+
+	return m, nil
+}
+
+// renderSourcePicker renders the source selection view
+func (m Model) renderSourcePicker() string {
+	var b strings.Builder
+
+	b.WriteString("\n")
+	b.WriteString(HeaderStyle.Render(" Switch Source "))
+	b.WriteString("\n\n")
+
+	for i, option := range sourceOptions {
+		cursor := "  "
+		if i == m.sourcePickerCursor {
+			cursor = "> "
+		}
+
+		if i == m.sourcePickerCursor {
+			b.WriteString(SelectedTitleStyle.Render(cursor + option))
+		} else {
+			b.WriteString(TitleStyle.Render(cursor + option))
+		}
+		b.WriteString("\n")
+	}
+
+	b.WriteString("\n")
+
+	if m.editingSubreddit {
+		b.WriteString(MetaStyle.Render("  Enter subreddit: r/"))
+		b.WriteString(SelectedTitleStyle.Render(m.subredditInput))
+		b.WriteString(SelectedTitleStyle.Render("_"))
+		b.WriteString("\n\n")
+		b.WriteString(MetaStyle.Render("  Press Enter to confirm, Esc to cancel"))
+	} else {
+		b.WriteString(MetaStyle.Render("  ↑↓: navigate  Enter: select  Esc: cancel"))
+	}
+
+	b.WriteString("\n")
+
+	return b.String()
 }
 
 // Helper functions
