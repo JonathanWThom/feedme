@@ -2,13 +2,70 @@
 
 A terminal UI for browsing [Hacker News](https://news.ycombinator.com), [Lobste.rs](https://lobste.rs), and [Reddit](https://reddit.com).
 
-## Installation
-
-### Quick Install (macOS/Linux)
+## Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/JonathanWThom/feedme/main/install.sh | bash
 ```
+
+[Other installation options](#other-installation-options) available below.
+
+## Usage
+
+```bash
+# Browse Hacker News (default)
+fm
+
+# Browse Lobste.rs
+fm -s lobsters
+
+# Browse any subreddit
+fm -s r/golang
+fm -s r/bellingham
+fm -s r/seinfeld
+```
+
+You can also switch sources from within the app by pressing `s`.
+
+## Keybindings
+
+| Key | Action |
+|-----|--------|
+| `j` / `↓` | Move down |
+| `k` / `↑` | Move up |
+| `Enter` / `o` | Open link in browser |
+| `c` | View comments |
+| `b` / `Esc` | Back to stories |
+| `Tab` / `l` | Next feed |
+| `Shift+Tab` / `h` | Previous feed |
+| `s` | Switch source (HN, Lobste.rs, Reddit) |
+| `r` | Refresh |
+| `m` | Toggle select mode (to copy text) |
+| `?` | Toggle help |
+| `q` | Quit |
+
+## Sources
+
+### Hacker News
+- **Top** - Top stories
+- **New** - Newest stories
+- **Best** - Best stories
+- **Ask** - Ask HN posts
+- **Show** - Show HN posts
+
+### Lobste.rs
+- **Hot** - Hottest stories
+- **New** - Newest stories
+- **Recent** - Recently active
+
+### Reddit (`-s r/subreddit`)
+- **Hot** - Hot posts (default)
+- **New** - Newest posts
+- **Top** - Top posts
+- **Rising** - Rising posts
+- **Best** - Best posts
+
+## Other Installation Options
 
 ### Download Binary
 
@@ -68,61 +125,6 @@ mv fm ~/.local/bin/
 ```
 
 > **Note:** Ensure `~/.local/bin` is in your PATH. Add `export PATH="$HOME/.local/bin:$PATH"` to your shell config if needed.
-
-## Usage
-
-```bash
-# Browse Hacker News (default)
-fm
-
-# Browse Lobste.rs
-fm -s lobsters
-
-# Browse any subreddit
-fm -s r/golang
-fm -s r/bellingham
-fm -s r/seinfeld
-```
-
-You can also switch sources from within the app by pressing `s`.
-
-## Keybindings
-
-| Key | Action |
-|-----|--------|
-| `j` / `↓` | Move down |
-| `k` / `↑` | Move up |
-| `Enter` / `o` | Open link in browser |
-| `c` | View comments |
-| `b` / `Esc` | Back to stories |
-| `Tab` / `l` | Next feed |
-| `Shift+Tab` / `h` | Previous feed |
-| `s` | Switch source (HN, Lobste.rs, Reddit) |
-| `r` | Refresh |
-| `m` | Toggle select mode (to copy text) |
-| `?` | Toggle help |
-| `q` | Quit |
-
-## Sources
-
-### Hacker News
-- **Top** - Top stories
-- **New** - Newest stories
-- **Best** - Best stories
-- **Ask** - Ask HN posts
-- **Show** - Show HN posts
-
-### Lobste.rs
-- **Hot** - Hottest stories
-- **New** - Newest stories
-- **Recent** - Recently active
-
-### Reddit (`-s r/subreddit`)
-- **Hot** - Hot posts (default)
-- **New** - Newest posts
-- **Top** - Top posts
-- **Rising** - Rising posts
-- **Best** - Best posts
 
 ## Disclaimer
 
