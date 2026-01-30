@@ -1,6 +1,6 @@
 # feedme
 
-A read-only terminal UI for browsing [Hacker News](https://news.ycombinator.com), [Lobste.rs](https://lobste.rs), and [Reddit](https://reddit.com).
+A read-only terminal UI for browsing [Hacker News](https://news.ycombinator.com), [Lobste.rs](https://lobste.rs), and [reddit](https://reddit.com).
 
 ## Install (macOS/Linux)
 
