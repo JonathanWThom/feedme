@@ -1,6 +1,6 @@
 .PHONY: build install uninstall clean run
 
-BINARY_NAME=hn
+BINARY_NAME=fm
 INSTALL_PATH=/usr/local/bin
 
 build:
