@@ -2,13 +2,13 @@
 
 A terminal UI for browsing [Hacker News](https://news.ycombinator.com), [Lobste.rs](https://lobste.rs), and [Reddit](https://reddit.com).
 
-## Install
+## Install (macOS/Linux)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/JonathanWThom/feedme/main/install.sh | bash
 ```
 
-[Other installation options](#other-installation-options) available below.
+[Other installation options](#other-installation-options) (including Windows) available below.
 
 ## Usage
 
@@ -42,6 +42,7 @@ You can also switch sources from within the app by pressing `s`.
 | `r` | Refresh |
 | `v` | Visual mode (in comments) |
 | `y` | Yank selection to clipboard |
+| `m` | Toggle mouse (for terminal copy) |
 | `?` | Toggle help |
 | `q` | Quit |
 
