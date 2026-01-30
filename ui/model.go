@@ -770,6 +770,9 @@ func (m *Model) updateViewportWithHighlight() {
 		return
 	}
 
+	// Save scroll position
+	yOffset := m.viewport.YOffset
+
 	var lines []string
 	start, end := m.visualStart, m.visualEnd
 	if start > end {
@@ -778,7 +781,7 @@ func (m *Model) updateViewportWithHighlight() {
 
 	for i, line := range m.commentLines {
 		if m.visualMode && i >= start && i <= end {
-			// Highlight selected lines with reverse video
+			// Highlight selected lines
 			lines = append(lines, VisualSelectStyle.Render(line))
 		} else {
 			lines = append(lines, line)
@@ -786,6 +789,9 @@ func (m *Model) updateViewportWithHighlight() {
 	}
 
 	m.viewport.SetContent(strings.Join(lines, "\n"))
+
+	// Restore scroll position
+	m.viewport.SetYOffset(yOffset)
 }
 
 // yankSelection copies the selected text to the clipboard

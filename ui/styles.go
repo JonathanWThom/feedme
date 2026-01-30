@@ -73,10 +73,10 @@ var (
 			Foreground(dimText).
 			Padding(0, 1)
 
-	// Visual mode selection
+	// Visual mode selection - bright highlight
 	VisualSelectStyle = lipgloss.NewStyle().
-				Background(lipgloss.Color("#444444")).
-				Foreground(highlight)
+				Background(lipgloss.Color("#264F78")).
+				Foreground(lipgloss.Color("#FFFFFF"))
 )
 
 // IndentStyle returns a style for comment indentation
