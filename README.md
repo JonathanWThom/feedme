@@ -40,7 +40,8 @@ You can also switch sources from within the app by pressing `s`.
 | `Shift+Tab` / `h` | Previous feed |
 | `s` | Switch source (HN, Lobste.rs, Reddit) |
 | `r` | Refresh |
-| `m` | Toggle select mode (to copy text) |
+| `v` | Visual mode (in comments) |
+| `y` | Yank selection to clipboard |
 | `?` | Toggle help |
 | `q` | Quit |
 

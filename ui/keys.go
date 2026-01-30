@@ -21,6 +21,8 @@ type KeyMap struct {
 	End          key.Binding
 	ToggleMouse  key.Binding
 	SwitchSource key.Binding
+	Visual       key.Binding
+	Yank         key.Binding
 }
 
 // DefaultKeyMap returns the default keybindings
@@ -94,6 +96,14 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("s"),
 			key.WithHelp("s", "switch source"),
 		),
+		Visual: key.NewBinding(
+			key.WithKeys("v"),
+			key.WithHelp("v", "visual mode"),
+		),
+		Yank: key.NewBinding(
+			key.WithKeys("y"),
+			key.WithHelp("y", "yank selection"),
+		),
 	}
 }
 
@@ -108,6 +118,6 @@ func (k KeyMap) FullHelp() [][]key.Binding {
 		{k.Up, k.Down, k.PageUp, k.PageDown, k.Home, k.End},
 		{k.Enter, k.Open, k.Comments, k.Back},
 		{k.NextTab, k.PrevTab, k.Refresh, k.SwitchSource},
-		{k.ToggleMouse, k.Help, k.Quit},
+		{k.Visual, k.Yank, k.ToggleMouse, k.Help, k.Quit},
 	}
 }

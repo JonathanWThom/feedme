@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -69,6 +70,12 @@ type Model struct {
 	sourcePickerCursor int
 	subredditInput     string
 	editingSubreddit   bool
+
+	// Visual mode state
+	visualMode       bool
+	visualStart      int
+	visualEnd        int
+	commentLines     []string // Rendered comment lines for selection
 }
 
 // New creates a new Model with the default HN source
@@ -161,6 +168,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.adjustOffset()
 			} else if m.view == CommentsView {
 				m.viewport.LineUp(1)
+				if m.visualMode {
+					m.visualEnd = m.viewport.YOffset
+					m.updateViewportWithHighlight()
+				}
 			}
 
 		case key.Matches(msg, m.keys.Down):
@@ -177,6 +188,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			} else if m.view == CommentsView {
 				m.viewport.LineDown(1)
+				if m.visualMode {
+					m.visualEnd = m.viewport.YOffset
+					m.updateViewportWithHighlight()
+				}
 			}
 
 		case key.Matches(msg, m.keys.PageDown):
@@ -239,9 +254,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case key.Matches(msg, m.keys.Back):
+			if m.visualMode {
+				m.visualMode = false
+				m.updateViewportWithHighlight()
+				return m, nil
+			}
 			if m.view == CommentsView {
 				m.view = StoriesView
 				m.comments = nil
+				m.commentLines = nil
+			}
+
+		case key.Matches(msg, m.keys.Visual):
+			if m.view == CommentsView && !m.visualMode {
+				m.visualMode = true
+				m.visualStart = m.viewport.YOffset
+				m.visualEnd = m.viewport.YOffset
+				m.updateViewportWithHighlight()
+			}
+
+		case key.Matches(msg, m.keys.Yank):
+			if m.view == CommentsView && m.visualMode {
+				m.yankSelection()
+				m.visualMode = false
+				m.updateViewportWithHighlight()
 			}
 
 		case key.Matches(msg, m.keys.NextTab):
@@ -338,7 +374,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.err
 		} else {
 			m.comments = msg.comments
-			m.viewport.SetContent(m.renderComments())
+			content := m.renderComments()
+			m.commentLines = strings.Split(content, "\n")
+			m.viewport.SetContent(content)
 			m.viewport.GotoTop()
 		}
 	}
@@ -576,8 +614,13 @@ func (m Model) renderStatusBar() string {
 		left = fmt.Sprintf(" %d/%d stories%s", m.cursor+1, len(m.stories), mouseStatus)
 		right = "↑↓:nav  enter:open  c:comments  tab:feed  s:source  ?:help  q:quit "
 	case CommentsView:
-		left = fmt.Sprintf(" %d comments%s", len(m.comments), mouseStatus)
-		right = "↑↓:scroll  o:open link  b:back  ?:help  q:quit "
+		if m.visualMode {
+			left = fmt.Sprintf(" -- VISUAL -- lines %d-%d%s", m.visualStart+1, m.visualEnd+1, mouseStatus)
+			right = "↑↓:select  y:yank  esc:cancel "
+		} else {
+			left = fmt.Sprintf(" %d comments%s", len(m.comments), mouseStatus)
+			right = "↑↓:scroll  v:visual  o:open link  b:back  ?:help  q:quit "
+		}
 	case SourcePickerView:
 		left = " Select a source"
 		right = "↑↓:nav  enter:select  esc:cancel  q:quit "
@@ -719,6 +762,64 @@ func (m Model) renderSourcePicker() string {
 	b.WriteString("\n")
 
 	return b.String()
+}
+
+// updateViewportWithHighlight re-renders the viewport with visual selection highlighting
+func (m *Model) updateViewportWithHighlight() {
+	if len(m.commentLines) == 0 {
+		return
+	}
+
+	var lines []string
+	start, end := m.visualStart, m.visualEnd
+	if start > end {
+		start, end = end, start
+	}
+
+	for i, line := range m.commentLines {
+		if m.visualMode && i >= start && i <= end {
+			// Highlight selected lines with reverse video
+			lines = append(lines, VisualSelectStyle.Render(line))
+		} else {
+			lines = append(lines, line)
+		}
+	}
+
+	m.viewport.SetContent(strings.Join(lines, "\n"))
+}
+
+// yankSelection copies the selected text to the clipboard
+func (m *Model) yankSelection() {
+	if len(m.commentLines) == 0 {
+		return
+	}
+
+	start, end := m.visualStart, m.visualEnd
+	if start > end {
+		start, end = end, start
+	}
+
+	// Clamp to valid range
+	if start < 0 {
+		start = 0
+	}
+	if end >= len(m.commentLines) {
+		end = len(m.commentLines) - 1
+	}
+
+	selected := m.commentLines[start : end+1]
+	text := strings.Join(selected, "\n")
+
+	// Strip ANSI escape codes for clean clipboard text
+	text = stripAnsi(text)
+
+	clipboard.WriteAll(text)
+}
+
+// stripAnsi removes ANSI escape codes from a string
+func stripAnsi(s string) string {
+	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*m`)
+	return ansiRegex.ReplaceAllString(s, "")
 }
 
 // Helper functions
