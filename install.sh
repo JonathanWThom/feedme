@@ -25,20 +25,11 @@ case "$ARCH" in
         ;;
 esac
 
-case "$OS" in
-    darwin|linux)
-        EXT="tar.gz"
-        ;;
-    mingw*|msys*|cygwin*)
-        OS="windows"
-        EXT="zip"
-        BINARY_NAME="fm.exe"
-        ;;
-    *)
-        echo "Unsupported OS: $OS"
-        exit 1
-        ;;
-esac
+if [ "$OS" != "darwin" ] && [ "$OS" != "linux" ]; then
+    echo "Unsupported OS: $OS"
+    echo "For Windows, see: https://github.com/JonathanWThom/feedme#other-installation-options"
+    exit 1
+fi
 
 # Get latest release tag
 echo "Detecting latest release..."
@@ -60,7 +51,7 @@ if [ -z "$LATEST" ]; then
 fi
 
 # Download URL (matches goreleaser naming: fm_darwin_arm64.tar.gz)
-FILENAME="fm_${OS}_${ARCH}.${EXT}"
+FILENAME="fm_${OS}_${ARCH}.tar.gz"
 DOWNLOAD_URL="https://github.com/$REPO/releases/download/$LATEST/$FILENAME"
 
 echo "Downloading $BINARY_NAME $LATEST for $OS/$ARCH..."
@@ -89,11 +80,7 @@ fi
 
 # Extract
 cd "$TMP_DIR"
-if [ "$EXT" = "tar.gz" ]; then
-    tar xzf "$FILENAME"
-else
-    unzip -q "$FILENAME"
-fi
+tar xzf "$FILENAME"
 
 # Create install directory if needed
 mkdir -p "$INSTALL_DIR"
