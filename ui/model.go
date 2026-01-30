@@ -411,6 +411,11 @@ func (m Model) View() string {
 func (m Model) renderHeader() string {
 	title := HeaderStyle.Render(" " + m.source.Name() + " ")
 
+	// Hide tabs when viewing comments
+	if m.view == CommentsView {
+		return title
+	}
+
 	var tabs []string
 	feedLabels := m.source.FeedLabels()
 	for i, label := range feedLabels {
