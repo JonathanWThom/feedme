@@ -42,6 +42,10 @@ type storyIDsLoadedMsg struct {
 	err error
 }
 
+type updateCheckMsg struct {
+	info *api.UpdateInfo
+}
+
 // Model is the main application model
 type Model struct {
 	source   api.Source
@@ -76,15 +80,19 @@ type Model struct {
 	visualStart      int
 	visualEnd        int
 	commentLines     []string // Rendered comment lines for selection
+
+	// Update notification
+	updateInfo    *api.UpdateInfo
+	updateChan    <-chan *api.UpdateInfo
 }
 
 // New creates a new Model with the default HN source
 func New() Model {
-	return NewWithSource(api.NewClient())
+	return NewWithSource(api.NewClient(), nil)
 }
 
 // NewWithSource creates a new Model with a specific source
-func NewWithSource(source api.Source) Model {
+func NewWithSource(source api.Source, updateChan <-chan *api.UpdateInfo) Model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = SpinnerStyle
@@ -102,15 +110,27 @@ func NewWithSource(source api.Source) Model {
 		feed:         0,
 		loading:      true,
 		mouseEnabled: true,
+		updateChan:   updateChan,
 	}
 }
 
 // Init initializes the model
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(
+	cmds := []tea.Cmd{
 		m.spinner.Tick,
 		m.loadStoryIDs(),
-	)
+	}
+	if m.updateChan != nil {
+		cmds = append(cmds, m.waitForUpdate())
+	}
+	return tea.Batch(cmds...)
+}
+
+func (m Model) waitForUpdate() tea.Cmd {
+	return func() tea.Msg {
+		info := <-m.updateChan
+		return updateCheckMsg{info: info}
+	}
 }
 
 func (m Model) loadStoryIDs() tea.Cmd {
@@ -379,6 +399,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.SetContent(content)
 			m.viewport.GotoTop()
 		}
+
+	case updateCheckMsg:
+		if msg.info != nil && msg.info.HasUpdate() {
+			m.updateInfo = msg.info
+		}
 	}
 
 	return m, tea.Batch(cmds...)
@@ -609,16 +634,21 @@ func (m Model) renderStatusBar() string {
 		mouseStatus = " [SELECT MODE - m to exit]"
 	}
 
+	updateMsg := ""
+	if m.updateInfo != nil && m.updateInfo.HasUpdate() {
+		updateMsg = " [" + m.updateInfo.FormatUpdateMessage() + "]"
+	}
+
 	switch m.view {
 	case StoriesView:
-		left = fmt.Sprintf(" %d/%d stories%s", m.cursor+1, len(m.stories), mouseStatus)
+		left = fmt.Sprintf(" %d/%d stories%s%s", m.cursor+1, len(m.stories), mouseStatus, updateMsg)
 		right = "↑↓:nav  enter:open  c:comments  tab:feed  s:source  ?:help  q:quit "
 	case CommentsView:
 		if m.visualMode {
 			left = fmt.Sprintf(" -- VISUAL -- lines %d-%d%s", m.visualStart+1, m.visualEnd+1, mouseStatus)
 			right = "↑↓:select  y:yank  esc:cancel "
 		} else {
-			left = fmt.Sprintf(" %d comments%s", len(m.comments), mouseStatus)
+			left = fmt.Sprintf(" %d comments%s%s", len(m.comments), mouseStatus, updateMsg)
 			right = "↑↓:scroll  v:visual  o:open link  b:back  ?:help  q:quit "
 		}
 	case SourcePickerView:

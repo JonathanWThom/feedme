@@ -11,11 +11,28 @@ import (
 	"github.com/JonathanWThom/feedme/ui"
 )
 
+// version is set at build time via ldflags
+var version = "dev"
+
 func main() {
 	var sourceFlag string
+	var showVersion bool
 	flag.StringVar(&sourceFlag, "source", "hn", "News source: hn, lobsters, or r/subreddit (e.g., r/golang)")
 	flag.StringVar(&sourceFlag, "s", "hn", "News source (shorthand)")
+	flag.BoolVar(&showVersion, "version", false, "Show version information")
+	flag.BoolVar(&showVersion, "v", false, "Show version information (shorthand)")
 	flag.Parse()
+
+	if showVersion {
+		fmt.Printf("feedme %s\n", version)
+		os.Exit(0)
+	}
+
+	// Check for updates in background
+	updateChan := make(chan *api.UpdateInfo, 1)
+	go func() {
+		updateChan <- api.CheckForUpdate(version)
+	}()
 
 	var source api.Source
 	sourceLower := strings.ToLower(sourceFlag)
@@ -34,7 +51,7 @@ func main() {
 	}
 
 	p := tea.NewProgram(
-		ui.NewWithSource(source),
+		ui.NewWithSource(source, updateChan),
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)
