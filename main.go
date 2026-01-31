@@ -6,9 +6,9 @@ import (
 	"os"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/JonathanWThom/feedme/api"
 	"github.com/JonathanWThom/feedme/ui"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // version is set at build time via ldflags
@@ -17,7 +17,7 @@ var version = "dev"
 func main() {
 	var sourceFlag string
 	var showVersion bool
-	flag.StringVar(&sourceFlag, "source", "hn", "News source: hn, lobsters, or r/subreddit (e.g., r/golang)")
+	flag.StringVar(&sourceFlag, "source", "hn", "News source: hn, lobsters, tildes, or r/subreddit (e.g., r/golang)")
 	flag.StringVar(&sourceFlag, "s", "hn", "News source (shorthand)")
 	flag.BoolVar(&showVersion, "version", false, "Show version information")
 	flag.BoolVar(&showVersion, "v", false, "Show version information (shorthand)")
@@ -42,11 +42,15 @@ func main() {
 		source = api.NewClient()
 	case sourceLower == "lobsters" || sourceLower == "lobste.rs" || sourceLower == "l":
 		source = api.NewLobstersClient()
+	case sourceLower == "tildes" || sourceLower == "tildes.net" || sourceLower == "t":
+		source = api.NewTildesClient()
+	case strings.HasPrefix(sourceLower, "~"):
+		source = api.NewTildesClientWithGroup(sourceFlag)
 	case strings.HasPrefix(sourceLower, "r/") || strings.HasPrefix(sourceLower, "/r/"):
 		source = api.NewRedditClient(sourceFlag)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown source: %s\n", sourceFlag)
-		fmt.Fprintf(os.Stderr, "Valid sources: hn, lobsters, r/subreddit\n")
+		fmt.Fprintf(os.Stderr, "Valid sources: hn, lobsters, tildes, ~group, r/subreddit\n")
 		os.Exit(1)
 	}
 
