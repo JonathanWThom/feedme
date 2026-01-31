@@ -74,6 +74,8 @@ type Model struct {
 	sourcePickerCursor int
 	subredditInput     string
 	editingSubreddit   bool
+	rssInput           string
+	editingRSS         bool
 
 	// Visual mode state
 	visualMode       bool
@@ -669,7 +671,7 @@ func (m Model) renderFullHelp() string {
 }
 
 // Source picker options
-var sourceOptions = []string{"Hacker News", "Lobste.rs", "Reddit"}
+var sourceOptions = []string{"Hacker News", "Lobste.rs", "Reddit", "RSS Feed"}
 
 // handleSourcePickerInput handles keyboard input in the source picker
 func (m Model) handleSourcePickerInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -700,6 +702,37 @@ func (m Model) handleSourcePickerInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		case tea.KeyRunes:
 			m.subredditInput += string(msg.Runes)
+		}
+		return m, nil
+	}
+
+	// If editing RSS URL, handle text input
+	if m.editingRSS {
+		switch msg.Type {
+		case tea.KeyEnter:
+			if m.rssInput != "" {
+				// Switch to the entered RSS feed
+				m.source = api.NewRSSClient(m.rssInput)
+				m.view = StoriesView
+				m.feed = 0
+				m.stories = nil
+				m.storyIDs = nil
+				m.cursor = 0
+				m.offset = 0
+				m.err = nil
+				m.loading = true
+				m.editingRSS = false
+				return m, tea.Batch(m.spinner.Tick, m.loadStoryIDs())
+			}
+		case tea.KeyEsc:
+			m.editingRSS = false
+			m.rssInput = ""
+		case tea.KeyBackspace:
+			if len(m.rssInput) > 0 {
+				m.rssInput = m.rssInput[:len(m.rssInput)-1]
+			}
+		case tea.KeyRunes:
+			m.rssInput += string(msg.Runes)
 		}
 		return m, nil
 	}
@@ -746,6 +779,9 @@ func (m Model) handleSourcePickerInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case 2: // Reddit
 			m.editingSubreddit = true
 			m.subredditInput = ""
+		case 3: // RSS Feed
+			m.editingRSS = true
+			m.rssInput = "https://"
 		}
 
 	case key.Matches(msg, m.keys.Back):
@@ -782,6 +818,12 @@ func (m Model) renderSourcePicker() string {
 	if m.editingSubreddit {
 		b.WriteString(MetaStyle.Render("  Enter subreddit: r/"))
 		b.WriteString(SelectedTitleStyle.Render(m.subredditInput))
+		b.WriteString(SelectedTitleStyle.Render("_"))
+		b.WriteString("\n\n")
+		b.WriteString(MetaStyle.Render("  Press Enter to confirm, Esc to cancel"))
+	} else if m.editingRSS {
+		b.WriteString(MetaStyle.Render("  Enter RSS URL: "))
+		b.WriteString(SelectedTitleStyle.Render(m.rssInput))
 		b.WriteString(SelectedTitleStyle.Render("_"))
 		b.WriteString("\n\n")
 		b.WriteString(MetaStyle.Render("  Press Enter to confirm, Esc to cancel"))
