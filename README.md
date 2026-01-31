@@ -1,6 +1,6 @@
 # feedme
 
-A read-only terminal UI for browsing [Hacker News](https://news.ycombinator.com), [Lobste.rs](https://lobste.rs), and [reddit](https://reddit.com).
+A read-only terminal UI for browsing [Hacker News](https://news.ycombinator.com), [Lobste.rs](https://lobste.rs), [Tildes](https://tildes.net), and [Reddit](https://reddit.com).
 
 ## Install (macOS/Linux)
 
@@ -18,6 +18,13 @@ fm
 
 # Browse Lobste.rs
 fm -s lobsters
+
+# Browse Tildes
+fm -s tildes
+
+# Browse a specific Tildes group
+fm -s ~tech
+fm -s ~comp
 
 # Browse any subreddit
 fm -s r/golang
@@ -38,7 +45,7 @@ You can also switch sources from within the app by pressing `s`.
 | `b` / `Esc` | Back to stories |
 | `Tab` / `l` | Next feed |
 | `Shift+Tab` / `h` | Previous feed |
-| `s` | Switch source (HN, Lobste.rs, Reddit) |
+| `s` | Switch source (HN, Lobste.rs, Tildes, Reddit) |
 | `r` | Refresh |
 | `v` | Visual mode (in comments) |
 | `y` | Yank selection to clipboard |
@@ -59,6 +66,12 @@ You can also switch sources from within the app by pressing `s`.
 - **Hot** - Hottest stories
 - **New** - Newest stories
 - **Recent** - Recently active
+
+### Tildes (`-s tildes` or `-s ~group`)
+- **Activity** - Recently active topics (default)
+- **New** - Newest topics
+- **Votes** - Highest voted
+- **Comments** - Most comments
 
 ### Reddit (`-s r/subreddit`)
 - **Hot** - Hot posts (default)

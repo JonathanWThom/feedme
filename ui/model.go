@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/JonathanWThom/feedme/api"
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
@@ -13,7 +14,6 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/JonathanWThom/feedme/api"
 	"github.com/pkg/browser"
 )
 
@@ -55,13 +55,13 @@ type Model struct {
 	viewport viewport.Model
 
 	// State
-	view        View
-	feed        int
-	storyIDs    []int
-	stories     []*api.Item
-	comments    []*api.Comment
-	cursor      int
-	offset      int
+	view         View
+	feed         int
+	storyIDs     []int
+	stories      []*api.Item
+	comments     []*api.Comment
+	cursor       int
+	offset       int
 	loading      bool
 	err          error
 	showHelp     bool
@@ -76,14 +76,14 @@ type Model struct {
 	editingSubreddit   bool
 
 	// Visual mode state
-	visualMode       bool
-	visualStart      int
-	visualEnd        int
-	commentLines     []string // Rendered comment lines for selection
+	visualMode   bool
+	visualStart  int
+	visualEnd    int
+	commentLines []string // Rendered comment lines for selection
 
 	// Update notification
-	updateInfo    *api.UpdateInfo
-	updateChan    <-chan *api.UpdateInfo
+	updateInfo *api.UpdateInfo
+	updateChan <-chan *api.UpdateInfo
 }
 
 // New creates a new Model with the default HN source
@@ -669,7 +669,7 @@ func (m Model) renderFullHelp() string {
 }
 
 // Source picker options
-var sourceOptions = []string{"Hacker News", "Lobste.rs", "Reddit"}
+var sourceOptions = []string{"Hacker News", "Lobste.rs", "Tildes", "Reddit"}
 
 // handleSourcePickerInput handles keyboard input in the source picker
 func (m Model) handleSourcePickerInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -743,7 +743,18 @@ func (m Model) handleSourcePickerInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.err = nil
 			m.loading = true
 			return m, tea.Batch(m.spinner.Tick, m.loadStoryIDs())
-		case 2: // Reddit
+		case 2: // Tildes
+			m.source = api.NewTildesClient()
+			m.view = StoriesView
+			m.feed = 0
+			m.stories = nil
+			m.storyIDs = nil
+			m.cursor = 0
+			m.offset = 0
+			m.err = nil
+			m.loading = true
+			return m, tea.Batch(m.spinner.Tick, m.loadStoryIDs())
+		case 3: // Reddit
 			m.editingSubreddit = true
 			m.subredditInput = ""
 		}
