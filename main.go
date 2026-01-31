@@ -17,7 +17,7 @@ var version = "dev"
 func main() {
 	var sourceFlag string
 	var showVersion bool
-	flag.StringVar(&sourceFlag, "source", "hn", "News source: hn, lobsters, or r/subreddit (e.g., r/golang)")
+	flag.StringVar(&sourceFlag, "source", "hn", "News source: hn, lobsters, r/subreddit, bbc, npr, google, reuters, ap")
 	flag.StringVar(&sourceFlag, "s", "hn", "News source (shorthand)")
 	flag.BoolVar(&showVersion, "version", false, "Show version information")
 	flag.BoolVar(&showVersion, "v", false, "Show version information (shorthand)")
@@ -44,9 +44,19 @@ func main() {
 		source = api.NewLobstersClient()
 	case strings.HasPrefix(sourceLower, "r/") || strings.HasPrefix(sourceLower, "/r/"):
 		source = api.NewRedditClient(sourceFlag)
+	case sourceLower == "bbc" || sourceLower == "bbcnews" || sourceLower == "bbc-news":
+		source = api.NewBBCClient()
+	case sourceLower == "npr":
+		source = api.NewNPRClient()
+	case sourceLower == "google" || sourceLower == "googlenews" || sourceLower == "google-news":
+		source = api.NewGoogleNewsClient()
+	case sourceLower == "reuters":
+		source = api.NewReutersClient()
+	case sourceLower == "ap" || sourceLower == "apnews" || sourceLower == "ap-news":
+		source = api.NewAPNewsClient()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown source: %s\n", sourceFlag)
-		fmt.Fprintf(os.Stderr, "Valid sources: hn, lobsters, r/subreddit\n")
+		fmt.Fprintf(os.Stderr, "Valid sources: hn, lobsters, r/subreddit, bbc, npr, google, reuters, ap\n")
 		os.Exit(1)
 	}
 
