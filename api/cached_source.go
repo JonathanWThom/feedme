@@ -89,7 +89,15 @@ func doWithRetry(client *http.Client, url, userAgent string, cs *CachedSource) (
 	resp.Body.Close()
 	time.Sleep(2 * time.Second)
 	cs.Throttle()
-	return doRequest(client, url, userAgent)
+	resp, err = doRequest(client, url, userAgent)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode == 429 {
+		resp.Body.Close()
+		return nil, fmt.Errorf("rate limited (HTTP 429) after retry")
+	}
+	return resp, nil
 }
 
 func doRequest(client *http.Client, url, userAgent string) (*http.Response, error) {
