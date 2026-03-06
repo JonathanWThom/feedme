@@ -10,11 +10,11 @@ import (
 
 // Reddit feed types (correspond to URL paths)
 const (
-	RedditFeedHot         = "hot"
-	RedditFeedNew         = "new"
-	RedditFeedTop         = "top"
-	RedditFeedRising      = "rising"
-	RedditFeedBest        = "best"
+	RedditFeedHot    = "hot"
+	RedditFeedNew    = "new"
+	RedditFeedTop    = "top"
+	RedditFeedRising = "rising"
+	RedditFeedBest   = "best"
 )
 
 var RedditFeedNames = []string{RedditFeedHot, RedditFeedNew, RedditFeedTop, RedditFeedRising, RedditFeedBest}
@@ -30,7 +30,6 @@ type RedditClient struct {
 
 // NewRedditClient creates a new Reddit API client for a subreddit
 func NewRedditClient(subreddit string) *RedditClient {
-	// Clean up subreddit name (remove r/ prefix if present)
 	subreddit = strings.TrimPrefix(subreddit, "r/")
 	subreddit = strings.TrimPrefix(subreddit, "/r/")
 
@@ -61,37 +60,10 @@ func (c *RedditClient) FeedLabels() []string {
 
 // StoryURL returns the URL for viewing a story on Reddit
 func (c *RedditClient) StoryURL(item *Item) string {
-	// The Reddit permalink is stored in the Type field
 	if item.Type != "" && strings.HasPrefix(item.Type, "/r/") {
 		return fmt.Sprintf("https://www.reddit.com%s", item.Type)
 	}
 	return item.URL
-}
-
-// redditListing represents the top-level JSON structure
-type redditListing struct {
-	Data struct {
-		Children []struct {
-			Data redditPost `json:"data"`
-		} `json:"children"`
-	} `json:"data"`
-}
-
-// redditPost represents a Reddit post
-type redditPost struct {
-	ID           string  `json:"id"`
-	Title        string  `json:"title"`
-	Author       string  `json:"author"`
-	Score        int     `json:"score"`
-	URL          string  `json:"url"`
-	Permalink    string  `json:"permalink"`
-	NumComments  int     `json:"num_comments"`
-	CreatedUTC   float64 `json:"created_utc"`
-	Selftext     string  `json:"selftext"`
-	IsSelf       bool    `json:"is_self"`
-	Subreddit    string  `json:"subreddit"`
-	Domain       string  `json:"domain"`
-	LinkFlairText string `json:"link_flair_text"`
 }
 
 // FetchStoryIDs fetches story "IDs" for a feed
@@ -107,7 +79,6 @@ func (c *RedditClient) FetchStoryIDs(feed string) ([]int, error) {
 
 	ids := c.StoreItems(stories)
 
-	// Build Reddit ID mapping
 	c.idToReddit = make(map[int]string)
 	for i, story := range stories {
 		c.idToReddit[i+1] = story.Type
@@ -126,7 +97,6 @@ func (c *RedditClient) fetchStories(feed string) ([]*Item, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Reddit requires a User-Agent header
 	req.Header.Set("User-Agent", "feedme:v1.0 (terminal news reader)")
 
 	resp, err := c.http.Do(req)
@@ -136,7 +106,6 @@ func (c *RedditClient) fetchStories(feed string) ([]*Item, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 429 {
-		// Rate limited, wait and retry
 		time.Sleep(2 * time.Second)
 		c.Throttle()
 		req, _ = http.NewRequest("GET", url, nil)
@@ -157,63 +126,13 @@ func (c *RedditClient) fetchStories(feed string) ([]*Item, error) {
 		return nil, fmt.Errorf("failed to decode reddit response: %w", err)
 	}
 
-	var stories []*Item
-	for _, child := range listing.Data.Children {
-		post := child.Data
-		item := &Item{
-			ID:          hashShortID(post.ID),
-			Type:        post.Permalink, // Store permalink for later
-			Title:       post.Title,
-			By:          post.Author,
-			Score:       post.Score,
-			URL:         post.URL,
-			Time:        int64(post.CreatedUTC),
-			Descendants: post.NumComments,
-		}
-
-		// Store flair in Text field if present
-		if post.LinkFlairText != "" {
-			item.Text = "[" + post.LinkFlairText + "]"
-		}
-
-		// For self posts, the URL should point to Reddit
-		if post.IsSelf {
-			item.URL = fmt.Sprintf("https://www.reddit.com%s", post.Permalink)
-		}
-
-		stories = append(stories, item)
-	}
-
-	return stories, nil
-}
-
-
-// redditCommentListing represents the comments JSON structure
-type redditCommentListing struct {
-	Data struct {
-		Children []struct {
-			Kind string          `json:"kind"`
-			Data json.RawMessage `json:"data"`
-		} `json:"children"`
-	} `json:"data"`
-}
-
-// redditComment represents a Reddit comment
-type redditComment struct {
-	ID         string  `json:"id"`
-	Author     string  `json:"author"`
-	Body       string  `json:"body"`
-	Score      int     `json:"score"`
-	CreatedUTC float64 `json:"created_utc"`
-	Depth      int     `json:"depth"`
-	Replies    any `json:"replies"` // Can be "" or a listing
+	return parseRedditStories(listing), nil
 }
 
 // FetchCommentTree fetches comments for a story
 func (c *RedditClient) FetchCommentTree(item *Item, maxDepth int) ([]*Comment, error) {
 	c.Throttle()
 
-	// Get the permalink from the Type field
 	permalink := item.Type
 	if permalink == "" || !strings.HasPrefix(permalink, "/r/") {
 		return nil, fmt.Errorf("no permalink available")
@@ -237,7 +156,6 @@ func (c *RedditClient) FetchCommentTree(item *Item, maxDepth int) ([]*Comment, e
 		return nil, fmt.Errorf("reddit returned status %d", resp.StatusCode)
 	}
 
-	// Reddit returns an array: [post_listing, comments_listing]
 	var listings []redditCommentListing
 	if err := json.NewDecoder(resp.Body).Decode(&listings); err != nil {
 		return nil, fmt.Errorf("failed to decode comments: %w", err)
@@ -247,76 +165,5 @@ func (c *RedditClient) FetchCommentTree(item *Item, maxDepth int) ([]*Comment, e
 		return nil, fmt.Errorf("unexpected response format")
 	}
 
-	return c.parseComments(listings[1], maxDepth)
-}
-
-// parseComments extracts comments from the listing
-func (c *RedditClient) parseComments(listing redditCommentListing, maxDepth int) ([]*Comment, error) {
-	var comments []*Comment
-
-	for _, child := range listing.Data.Children {
-		if child.Kind != "t1" { // t1 = comment
-			continue
-		}
-
-		var rc redditComment
-		if err := json.Unmarshal(child.Data, &rc); err != nil {
-			continue
-		}
-
-		comment := c.parseComment(rc, maxDepth)
-		if comment != nil {
-			comments = append(comments, comment)
-		}
-	}
-
-	return comments, nil
-}
-
-// parseComment converts a Reddit comment to our Comment type
-func (c *RedditClient) parseComment(rc redditComment, maxDepth int) *Comment {
-	if rc.Author == "" || rc.Author == "[deleted]" {
-		return nil
-	}
-
-	item := &Item{
-		ID:    hashShortID(rc.ID),
-		Type:  "comment",
-		By:    rc.Author,
-		Text:  rc.Body,
-		Score: rc.Score,
-		Time:  int64(rc.CreatedUTC),
-	}
-
-	comment := &Comment{
-		Item:  item,
-		Depth: rc.Depth,
-	}
-
-	// Parse nested replies if present and within depth limit
-	if maxDepth <= 0 || rc.Depth < maxDepth {
-		if replies, ok := rc.Replies.(map[string]any); ok {
-			if data, ok := replies["data"].(map[string]any); ok {
-				if children, ok := data["children"].([]any); ok {
-					for _, child := range children {
-						if childMap, ok := child.(map[string]any); ok {
-							if childMap["kind"] == "t1" {
-								if childData, ok := childMap["data"].(map[string]any); ok {
-									childJSON, _ := json.Marshal(childData)
-									var childRC redditComment
-									if err := json.Unmarshal(childJSON, &childRC); err == nil {
-										if childComment := c.parseComment(childRC, maxDepth); childComment != nil {
-											comment.Children = append(comment.Children, childComment)
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return comment
+	return parseRedditComments(listings[1], maxDepth)
 }
