@@ -2,8 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"html"
-	"regexp"
 	"strings"
 
 	"github.com/atotto/clipboard"
@@ -55,13 +53,13 @@ type Model struct {
 	viewport viewport.Model
 
 	// State
-	view        View
-	feed        int
-	storyIDs    []int
-	stories     []*api.Item
-	comments    []*api.Comment
-	cursor      int
-	offset      int
+	view         View
+	feed         int
+	storyIDs     []int
+	stories      []*api.Item
+	comments     []*api.Comment
+	cursor       int
+	offset       int
 	loading      bool
 	err          error
 	showHelp     bool
@@ -76,14 +74,14 @@ type Model struct {
 	editingSubreddit   bool
 
 	// Visual mode state
-	visualMode       bool
-	visualStart      int
-	visualEnd        int
-	commentLines     []string // Rendered comment lines for selection
+	visualMode   bool
+	visualStart  int
+	visualEnd    int
+	commentLines []string
 
 	// Update notification
-	updateInfo    *api.UpdateInfo
-	updateChan    <-chan *api.UpdateInfo
+	updateInfo *api.UpdateInfo
+	updateChan <-chan *api.UpdateInfo
 }
 
 // New creates a new Model with the default HN source
@@ -156,18 +154,38 @@ func (m Model) loadComments(item *api.Item) tea.Cmd {
 	}
 }
 
+// resetForNewSource resets state when switching sources or feeds
+func (m *Model) resetForNewSource() {
+	m.view = StoriesView
+	m.feed = 0
+	m.stories = nil
+	m.storyIDs = nil
+	m.cursor = 0
+	m.offset = 0
+	m.err = nil
+	m.loading = true
+}
+
+// resetForNewFeed resets state when switching feeds within same source
+func (m *Model) resetForNewFeed() {
+	m.stories = nil
+	m.storyIDs = nil
+	m.cursor = 0
+	m.offset = 0
+	m.err = nil
+	m.loading = true
+}
+
 // Update handles messages
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		// Handle source picker input
 		if m.view == SourcePickerView {
 			return m.handleSourcePickerInput(msg)
 		}
 
-		// Handle help toggle first
 		if key.Matches(msg, m.keys.Help) {
 			m.showHelp = !m.showHelp
 			return m, nil
@@ -198,7 +216,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.view == StoriesView && m.cursor < len(m.stories)-1 {
 				m.cursor++
 				m.adjustOffset()
-				// Load more stories if near the end
 				if m.cursor >= len(m.stories)-5 && len(m.storyIDs) > len(m.stories) {
 					nextBatch := m.storyIDs[len(m.stories):min(len(m.stories)+30, len(m.storyIDs))]
 					if len(nextBatch) > 0 {
@@ -256,7 +273,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if story != nil && story.URL != "" {
 				_ = browser.OpenURL(story.URL)
 			} else if story != nil {
-				// For Ask HN, Show HN, etc. - open the source's page
 				url := m.source.StoryURL(story)
 				_ = browser.OpenURL(url)
 			}
@@ -304,12 +320,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.view == StoriesView {
 				feedNames := m.source.FeedNames()
 				m.feed = (m.feed + 1) % len(feedNames)
-				m.stories = nil
-				m.storyIDs = nil
-				m.cursor = 0
-				m.offset = 0
-				m.err = nil
-				m.loading = true
+				m.resetForNewFeed()
 				return m, tea.Batch(m.spinner.Tick, m.loadStoryIDs())
 			}
 
@@ -317,22 +328,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.view == StoriesView {
 				feedNames := m.source.FeedNames()
 				m.feed = (m.feed - 1 + len(feedNames)) % len(feedNames)
-				m.stories = nil
-				m.storyIDs = nil
-				m.cursor = 0
-				m.offset = 0
-				m.err = nil
-				m.loading = true
+				m.resetForNewFeed()
 				return m, tea.Batch(m.spinner.Tick, m.loadStoryIDs())
 			}
 
 		case key.Matches(msg, m.keys.Refresh):
-			m.loading = true
-			m.stories = nil
-			m.storyIDs = nil
-			m.cursor = 0
-			m.offset = 0
-			m.err = nil
+			m.resetForNewFeed()
 			return m, tea.Batch(m.spinner.Tick, m.loadStoryIDs())
 
 		case key.Matches(msg, m.keys.ToggleMouse):
@@ -370,7 +371,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.loading = false
 		} else {
 			m.storyIDs = msg.ids
-			// Load first batch of stories
 			batchSize := min(30, len(msg.ids))
 			return m, m.loadStories(msg.ids[:batchSize])
 		}
@@ -380,7 +380,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.err = msg.err
 		} else {
-			// Append non-nil stories
 			for _, s := range msg.stories {
 				if s != nil {
 					m.stories = append(m.stories, s)
@@ -422,17 +421,6 @@ func (m *Model) adjustOffset() {
 	}
 }
 
-// visibleStoryCount returns how many stories fit on screen
-func (m Model) visibleStoryCount() int {
-	// Each story takes 2 lines, account for header (2 lines) and status bar (1 line)
-	availableLines := m.height - 3
-	count := availableLines / 2
-	if count < 1 {
-		return 1
-	}
-	return count
-}
-
 // View renders the model
 func (m Model) View() string {
 	if m.width == 0 {
@@ -441,12 +429,10 @@ func (m Model) View() string {
 
 	var b strings.Builder
 
-	// Header with tabs
 	b.WriteString("\n")
 	b.WriteString(m.renderHeader())
 	b.WriteString("\n")
 
-	// Main content
 	if m.loading {
 		b.WriteString(fmt.Sprintf("\n  %s Loading...\n", m.spinner.View()))
 	} else if m.err != nil {
@@ -464,332 +450,8 @@ func (m Model) View() string {
 		}
 	}
 
-	// Status bar
 	b.WriteString("\n")
 	b.WriteString(m.renderStatusBar())
-
-	return b.String()
-}
-
-func (m Model) renderHeader() string {
-	title := HeaderStyle.Render(" " + m.source.Name() + " ")
-
-	// Hide tabs when viewing comments
-	if m.view == CommentsView {
-		return title
-	}
-
-	var tabs []string
-	feedLabels := m.source.FeedLabels()
-	for i, label := range feedLabels {
-		if i == m.feed {
-			tabs = append(tabs, ActiveTabStyle.Render(label))
-		} else {
-			tabs = append(tabs, TabStyle.Render(label))
-		}
-	}
-
-	tabsStr := strings.Join(tabs, "")
-	return title + " " + tabsStr
-}
-
-func (m Model) renderStories() string {
-	if len(m.stories) == 0 {
-		return "\n  No stories to display\n"
-	}
-
-	var b strings.Builder
-	visibleCount := m.visibleStoryCount()
-	start := m.offset
-	end := min(start+visibleCount, len(m.stories))
-
-	for i := start; i < end; i++ {
-		story := m.stories[i]
-		if story == nil {
-			continue
-		}
-
-		isSelected := i == m.cursor
-		b.WriteString(m.renderStory(i, story, isSelected))
-	}
-
-	return b.String()
-}
-
-func (m Model) renderStory(idx int, story *api.Item, selected bool) string {
-	var b strings.Builder
-
-	// Number
-	num := fmt.Sprintf("%3d. ", idx+1)
-	if selected {
-		num = ScoreStyle.Render(num)
-	} else {
-		num = MetaStyle.Render(num)
-	}
-	b.WriteString(num)
-
-	// Title
-	title := story.Title
-	if len(title) > m.width-20 {
-		title = title[:m.width-23] + "..."
-	}
-	if selected {
-		b.WriteString(SelectedTitleStyle.Render(title))
-	} else {
-		b.WriteString(TitleStyle.Render(title))
-	}
-
-	// Domain
-	if domain := story.Domain(); domain != "" {
-		b.WriteString(" ")
-		b.WriteString(URLStyle.Render(fmt.Sprintf("(%s)", domain)))
-	}
-	b.WriteString("\n")
-
-	// Meta line - include tags if present (for Lobste.rs)
-	var meta string
-	if story.Text != "" && strings.HasPrefix(story.Text, "[") {
-		// Has tags (Lobste.rs style)
-		meta = fmt.Sprintf("      %d points by %s %s | %d comments %s",
-			story.Score, story.By, story.TimeAgo(), story.Descendants, story.Text)
-	} else {
-		meta = fmt.Sprintf("      %d points by %s %s | %d comments",
-			story.Score, story.By, story.TimeAgo(), story.Descendants)
-	}
-	b.WriteString(MetaStyle.Render(meta))
-	b.WriteString("\n")
-
-	return b.String()
-}
-
-func (m Model) renderComments() string {
-	if m.currentItem == nil {
-		return ""
-	}
-
-	var b strings.Builder
-
-	// Story header
-	b.WriteString(SelectedTitleStyle.Render(m.currentItem.Title))
-	b.WriteString("\n")
-	if domain := m.currentItem.Domain(); domain != "" {
-		b.WriteString(URLStyle.Render(fmt.Sprintf("(%s)", domain)))
-		b.WriteString("\n")
-	}
-	meta := fmt.Sprintf("%d points by %s %s",
-		m.currentItem.Score, m.currentItem.By, m.currentItem.TimeAgo())
-	b.WriteString(MetaStyle.Render(meta))
-	b.WriteString("\n\n")
-
-	// Story text (for Ask HN, etc.)
-	if m.currentItem.Text != "" {
-		text := cleanHTML(m.currentItem.Text)
-		b.WriteString(CommentTextStyle.Render(wrapText(text, m.width-4)))
-		b.WriteString("\n\n")
-	}
-
-	b.WriteString(MetaStyle.Render(fmt.Sprintf("─── %d comments ───", m.currentItem.Descendants)))
-	b.WriteString("\n\n")
-
-	// Comments
-	for _, comment := range m.comments {
-		b.WriteString(m.renderComment(comment))
-	}
-
-	return b.String()
-}
-
-func (m Model) renderComment(c *api.Comment) string {
-	var b strings.Builder
-
-	indent := strings.Repeat("  ", c.Depth)
-	prefix := IndentStyle(c.Depth).Render("│ ")
-
-	// Author line
-	author := CommentAuthorStyle.Render(c.By)
-	time := CommentMetaStyle.Render(c.TimeAgo())
-	b.WriteString(indent + prefix + author + " " + time + "\n")
-
-	// Comment text
-	text := cleanHTML(c.Text)
-	lines := wrapTextLines(text, m.width-len(indent)-4)
-	for _, line := range lines {
-		b.WriteString(indent + prefix + CommentTextStyle.Render(line) + "\n")
-	}
-	b.WriteString(indent + prefix + "\n")
-
-	// Children
-	for _, child := range c.Children {
-		b.WriteString(m.renderComment(child))
-	}
-
-	return b.String()
-}
-
-func (m Model) renderStatusBar() string {
-	var left, right string
-
-	mouseStatus := ""
-	if !m.mouseEnabled {
-		mouseStatus = " [SELECT MODE - m to exit]"
-	}
-
-	updateMsg := ""
-	if m.updateInfo != nil && m.updateInfo.HasUpdate() {
-		updateMsg = " [" + m.updateInfo.FormatUpdateMessage() + "]"
-	}
-
-	switch m.view {
-	case StoriesView:
-		left = fmt.Sprintf(" %d/%d stories%s%s", m.cursor+1, len(m.stories), mouseStatus, updateMsg)
-		right = "↑↓:nav  enter:open  c:comments  tab:feed  s:source  ?:help  q:quit "
-	case CommentsView:
-		if m.visualMode {
-			left = fmt.Sprintf(" -- VISUAL -- lines %d-%d%s", m.visualStart+1, m.visualEnd+1, mouseStatus)
-			right = "↑↓:select  y:yank  esc:cancel "
-		} else {
-			left = fmt.Sprintf(" %d comments%s%s", len(m.comments), mouseStatus, updateMsg)
-			right = "↑↓:scroll  v:visual  o:open link  b:back  ?:help  q:quit "
-		}
-	case SourcePickerView:
-		left = " Select a source"
-		right = "↑↓:nav  enter:select  esc:cancel  q:quit "
-	}
-
-	gap := m.width - lipgloss.Width(left) - lipgloss.Width(right)
-	if gap < 0 {
-		gap = 0
-	}
-
-	return StatusBarStyle.Width(m.width).Render(left + strings.Repeat(" ", gap) + right)
-}
-
-func (m Model) renderFullHelp() string {
-	return "\n" + m.help.FullHelpView(m.keys.FullHelp()) + "\n\nPress any key to close help."
-}
-
-// Source picker options
-var sourceOptions = []string{"Hacker News", "Lobste.rs", "Reddit"}
-
-// handleSourcePickerInput handles keyboard input in the source picker
-func (m Model) handleSourcePickerInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// If editing subreddit, handle text input
-	if m.editingSubreddit {
-		switch msg.Type {
-		case tea.KeyEnter:
-			if m.subredditInput != "" {
-				// Switch to the entered subreddit
-				m.source = api.NewRedditClient(m.subredditInput)
-				m.view = StoriesView
-				m.feed = 0
-				m.stories = nil
-				m.storyIDs = nil
-				m.cursor = 0
-				m.offset = 0
-				m.err = nil
-				m.loading = true
-				m.editingSubreddit = false
-				return m, tea.Batch(m.spinner.Tick, m.loadStoryIDs())
-			}
-		case tea.KeyEsc:
-			m.editingSubreddit = false
-			m.subredditInput = ""
-		case tea.KeyBackspace:
-			if len(m.subredditInput) > 0 {
-				m.subredditInput = m.subredditInput[:len(m.subredditInput)-1]
-			}
-		case tea.KeyRunes:
-			m.subredditInput += string(msg.Runes)
-		}
-		return m, nil
-	}
-
-	// Normal source picker navigation
-	switch {
-	case key.Matches(msg, m.keys.Quit):
-		return m, tea.Quit
-
-	case key.Matches(msg, m.keys.Up):
-		if m.sourcePickerCursor > 0 {
-			m.sourcePickerCursor--
-		}
-
-	case key.Matches(msg, m.keys.Down):
-		if m.sourcePickerCursor < len(sourceOptions)-1 {
-			m.sourcePickerCursor++
-		}
-
-	case key.Matches(msg, m.keys.Enter):
-		switch m.sourcePickerCursor {
-		case 0: // Hacker News
-			m.source = api.NewClient()
-			m.view = StoriesView
-			m.feed = 0
-			m.stories = nil
-			m.storyIDs = nil
-			m.cursor = 0
-			m.offset = 0
-			m.err = nil
-			m.loading = true
-			return m, tea.Batch(m.spinner.Tick, m.loadStoryIDs())
-		case 1: // Lobste.rs
-			m.source = api.NewLobstersClient()
-			m.view = StoriesView
-			m.feed = 0
-			m.stories = nil
-			m.storyIDs = nil
-			m.cursor = 0
-			m.offset = 0
-			m.err = nil
-			m.loading = true
-			return m, tea.Batch(m.spinner.Tick, m.loadStoryIDs())
-		case 2: // Reddit
-			m.editingSubreddit = true
-			m.subredditInput = ""
-		}
-
-	case key.Matches(msg, m.keys.Back):
-		m.view = StoriesView
-	}
-
-	return m, nil
-}
-
-// renderSourcePicker renders the source selection view
-func (m Model) renderSourcePicker() string {
-	var b strings.Builder
-
-	b.WriteString("\n")
-	b.WriteString(HeaderStyle.Render(" Switch Source "))
-	b.WriteString("\n\n")
-
-	for i, option := range sourceOptions {
-		cursor := "  "
-		if i == m.sourcePickerCursor {
-			cursor = "> "
-		}
-
-		if i == m.sourcePickerCursor {
-			b.WriteString(SelectedTitleStyle.Render(cursor + option))
-		} else {
-			b.WriteString(TitleStyle.Render(cursor + option))
-		}
-		b.WriteString("\n")
-	}
-
-	b.WriteString("\n")
-
-	if m.editingSubreddit {
-		b.WriteString(MetaStyle.Render("  Enter subreddit: r/"))
-		b.WriteString(SelectedTitleStyle.Render(m.subredditInput))
-		b.WriteString(SelectedTitleStyle.Render("_"))
-		b.WriteString("\n\n")
-		b.WriteString(MetaStyle.Render("  Press Enter to confirm, Esc to cancel"))
-	} else {
-		b.WriteString(MetaStyle.Render("  ↑↓: navigate  Enter: select  Esc: cancel"))
-	}
-
-	b.WriteString("\n")
 
 	return b.String()
 }
@@ -800,7 +462,6 @@ func (m *Model) updateViewportWithHighlight() {
 		return
 	}
 
-	// Save scroll position
 	yOffset := m.viewport.YOffset
 
 	var lines []string
@@ -811,7 +472,6 @@ func (m *Model) updateViewportWithHighlight() {
 
 	for i, line := range m.commentLines {
 		if m.visualMode && i >= start && i <= end {
-			// Highlight selected lines
 			lines = append(lines, VisualSelectStyle.Render(line))
 		} else {
 			lines = append(lines, line)
@@ -819,8 +479,6 @@ func (m *Model) updateViewportWithHighlight() {
 	}
 
 	m.viewport.SetContent(strings.Join(lines, "\n"))
-
-	// Restore scroll position
 	m.viewport.SetYOffset(yOffset)
 }
 
@@ -835,7 +493,6 @@ func (m *Model) yankSelection() {
 		start, end = end, start
 	}
 
-	// Clamp to valid range
 	if start < 0 {
 		start = 0
 	}
@@ -845,78 +502,7 @@ func (m *Model) yankSelection() {
 
 	selected := m.commentLines[start : end+1]
 	text := strings.Join(selected, "\n")
-
-	// Strip ANSI escape codes for clean clipboard text
 	text = stripAnsi(text)
 
 	clipboard.WriteAll(text)
-}
-
-// stripAnsi removes ANSI escape codes from a string
-func stripAnsi(s string) string {
-	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*m`)
-	return ansiRegex.ReplaceAllString(s, "")
-}
-
-// Helper functions
-
-func cleanHTML(s string) string {
-	// Decode HTML entities
-	s = html.UnescapeString(s)
-
-	// Replace <p> tags with newlines
-	s = regexp.MustCompile(`<p>`).ReplaceAllString(s, "\n\n")
-
-	// Replace <br> tags
-	s = regexp.MustCompile(`<br\s*/?\s*>`).ReplaceAllString(s, "\n")
-
-	// Replace links with just the text
-	s = regexp.MustCompile(`<a\s+href="([^"]*)"[^>]*>([^<]*)</a>`).ReplaceAllString(s, "$2 [$1]")
-
-	// Remove remaining HTML tags
-	s = regexp.MustCompile(`<[^>]*>`).ReplaceAllString(s, "")
-
-	// Clean up whitespace
-	s = strings.TrimSpace(s)
-
-	return s
-}
-
-func wrapText(s string, width int) string {
-	return strings.Join(wrapTextLines(s, width), "\n")
-}
-
-func wrapTextLines(s string, width int) []string {
-	if width <= 0 {
-		width = 80
-	}
-
-	var lines []string
-	paragraphs := strings.Split(s, "\n")
-
-	for _, para := range paragraphs {
-		if para == "" {
-			lines = append(lines, "")
-			continue
-		}
-
-		words := strings.Fields(para)
-		if len(words) == 0 {
-			lines = append(lines, "")
-			continue
-		}
-
-		currentLine := words[0]
-		for _, word := range words[1:] {
-			if len(currentLine)+1+len(word) <= width {
-				currentLine += " " + word
-			} else {
-				lines = append(lines, currentLine)
-				currentLine = word
-			}
-		}
-		lines = append(lines, currentLine)
-	}
-
-	return lines
 }
