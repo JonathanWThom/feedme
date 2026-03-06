@@ -64,43 +64,48 @@ func (m Model) renderStories() string {
 
 func (m Model) renderStory(idx int, story *api.Item, selected bool) string {
 	var b strings.Builder
+	b.WriteString(m.renderStoryNumber(idx, selected))
+	b.WriteString(m.renderStoryTitle(story, selected))
+	b.WriteString(renderStoryDomain(story))
+	b.WriteString("\n")
+	b.WriteString(MetaStyle.Render(storyMeta(story)))
+	b.WriteString("\n")
+	return b.String()
+}
 
+func (m Model) renderStoryNumber(idx int, selected bool) string {
 	num := fmt.Sprintf("%3d. ", idx+1)
 	if selected {
-		num = ScoreStyle.Render(num)
-	} else {
-		num = MetaStyle.Render(num)
+		return ScoreStyle.Render(num)
 	}
-	b.WriteString(num)
+	return MetaStyle.Render(num)
+}
 
+func (m Model) renderStoryTitle(story *api.Item, selected bool) string {
 	title := story.Title
 	if len(title) > m.width-20 {
 		title = title[:m.width-23] + "..."
 	}
 	if selected {
-		b.WriteString(SelectedTitleStyle.Render(title))
-	} else {
-		b.WriteString(TitleStyle.Render(title))
+		return SelectedTitleStyle.Render(title)
 	}
+	return TitleStyle.Render(title)
+}
 
+func renderStoryDomain(story *api.Item) string {
 	if domain := story.Domain(); domain != "" {
-		b.WriteString(" ")
-		b.WriteString(URLStyle.Render(fmt.Sprintf("(%s)", domain)))
+		return " " + URLStyle.Render(fmt.Sprintf("(%s)", domain))
 	}
-	b.WriteString("\n")
+	return ""
+}
 
-	var meta string
+func storyMeta(story *api.Item) string {
+	meta := fmt.Sprintf("      %d points by %s %s | %d comments",
+		story.Score, story.By, story.TimeAgo(), story.Descendants)
 	if story.Text != "" && strings.HasPrefix(story.Text, "[") {
-		meta = fmt.Sprintf("      %d points by %s %s | %d comments %s",
-			story.Score, story.By, story.TimeAgo(), story.Descendants, story.Text)
-	} else {
-		meta = fmt.Sprintf("      %d points by %s %s | %d comments",
-			story.Score, story.By, story.TimeAgo(), story.Descendants)
+		meta += " " + story.Text
 	}
-	b.WriteString(MetaStyle.Render(meta))
-	b.WriteString("\n")
-
-	return b.String()
+	return meta
 }
 
 func (m Model) renderComments() string {
@@ -109,31 +114,29 @@ func (m Model) renderComments() string {
 	}
 
 	var b strings.Builder
+	b.WriteString(m.renderCommentHeader())
+	b.WriteString(MetaStyle.Render(fmt.Sprintf("─── %d comments ───", m.currentItem.Descendants)))
+	b.WriteString("\n\n")
+	for _, comment := range m.comments {
+		b.WriteString(m.renderComment(comment))
+	}
+	return b.String()
+}
 
-	b.WriteString(SelectedTitleStyle.Render(m.currentItem.Title))
-	b.WriteString("\n")
+func (m Model) renderCommentHeader() string {
+	var b strings.Builder
+	b.WriteString(SelectedTitleStyle.Render(m.currentItem.Title) + "\n")
+	b.WriteString(renderStoryDomain(m.currentItem))
 	if domain := m.currentItem.Domain(); domain != "" {
-		b.WriteString(URLStyle.Render(fmt.Sprintf("(%s)", domain)))
 		b.WriteString("\n")
 	}
 	meta := fmt.Sprintf("%d points by %s %s",
 		m.currentItem.Score, m.currentItem.By, m.currentItem.TimeAgo())
-	b.WriteString(MetaStyle.Render(meta))
-	b.WriteString("\n\n")
-
+	b.WriteString(MetaStyle.Render(meta) + "\n\n")
 	if m.currentItem.Text != "" {
 		text := cleanHTML(m.currentItem.Text)
-		b.WriteString(CommentTextStyle.Render(wrapText(text, m.width-4)))
-		b.WriteString("\n\n")
+		b.WriteString(CommentTextStyle.Render(wrapText(text, m.width-4)) + "\n\n")
 	}
-
-	b.WriteString(MetaStyle.Render(fmt.Sprintf("─── %d comments ───", m.currentItem.Descendants)))
-	b.WriteString("\n\n")
-
-	for _, comment := range m.comments {
-		b.WriteString(m.renderComment(comment))
-	}
-
 	return b.String()
 }
 
@@ -162,41 +165,50 @@ func (m Model) renderComment(c *api.Comment) string {
 }
 
 func (m Model) renderStatusBar() string {
-	var left, right string
+	left, right := m.statusBarContent()
+	gap := max(0, m.width-lipgloss.Width(left)-lipgloss.Width(right))
+	return StatusBarStyle.Width(m.width).Render(left + strings.Repeat(" ", gap) + right)
+}
 
-	mouseStatus := ""
-	if !m.mouseEnabled {
-		mouseStatus = " [SELECT MODE - m to exit]"
-	}
-
-	updateMsg := ""
-	if m.updateInfo != nil && m.updateInfo.HasUpdate() {
-		updateMsg = " [" + m.updateInfo.FormatUpdateMessage() + "]"
-	}
-
+func (m Model) statusBarContent() (string, string) {
+	suffix := m.statusBarSuffix()
 	switch m.view {
 	case StoriesView:
-		left = fmt.Sprintf(" %d/%d stories%s%s", m.cursor+1, len(m.stories), mouseStatus, updateMsg)
-		right = "↑↓:nav  enter:open  c:comments  tab:feed  s:source  ?:help  q:quit "
+		return fmt.Sprintf(" %d/%d stories%s", m.cursor+1, len(m.stories), suffix),
+			"↑↓:nav  enter:open  c:comments  tab:feed  s:source  ?:help  q:quit "
 	case CommentsView:
-		if m.visualMode {
-			left = fmt.Sprintf(" -- VISUAL -- lines %d-%d%s", m.visualStart+1, m.visualEnd+1, mouseStatus)
-			right = "↑↓:select  y:yank  esc:cancel "
-		} else {
-			left = fmt.Sprintf(" %d comments%s%s", len(m.comments), mouseStatus, updateMsg)
-			right = "↑↓:scroll  v:visual  o:open link  b:back  ?:help  q:quit "
-		}
+		return m.commentsStatusLeft(suffix),
+			m.commentsStatusRight()
 	case SourcePickerView:
-		left = " Select a source"
-		right = "↑↓:nav  enter:select  esc:cancel  q:quit "
+		return " Select a source",
+			"↑↓:nav  enter:select  esc:cancel  q:quit "
 	}
+	return "", ""
+}
 
-	gap := m.width - lipgloss.Width(left) - lipgloss.Width(right)
-	if gap < 0 {
-		gap = 0
+func (m Model) statusBarSuffix() string {
+	var s string
+	if !m.mouseEnabled {
+		s += " [SELECT MODE - m to exit]"
 	}
+	if m.updateInfo != nil && m.updateInfo.HasUpdate() {
+		s += " [" + m.updateInfo.FormatUpdateMessage() + "]"
+	}
+	return s
+}
 
-	return StatusBarStyle.Width(m.width).Render(left + strings.Repeat(" ", gap) + right)
+func (m Model) commentsStatusLeft(suffix string) string {
+	if m.visualMode {
+		return fmt.Sprintf(" -- VISUAL -- lines %d-%d%s", m.visualStart+1, m.visualEnd+1, suffix)
+	}
+	return fmt.Sprintf(" %d comments%s", len(m.comments), suffix)
+}
+
+func (m Model) commentsStatusRight() string {
+	if m.visualMode {
+		return "↑↓:select  y:yank  esc:cancel "
+	}
+	return "↑↓:scroll  v:visual  o:open link  b:back  ?:help  q:quit "
 }
 
 func (m Model) renderFullHelp() string {

@@ -4,10 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -36,36 +33,44 @@ type githubRelease struct {
 	HTMLURL string `json:"html_url"`
 }
 
-// updateCache stores the last check time and result
-type updateCache struct {
-	LastCheck     time.Time `json:"last_check"`
-	LatestVersion string    `json:"latest_version"`
-	UpdateURL     string    `json:"update_url"`
-}
-
 // CheckForUpdate checks if a newer version is available
 // It uses a cached result if checked within the last 24 hours
 func CheckForUpdate(currentVersion string) *UpdateInfo {
 	if currentVersion == "" || currentVersion == "dev" {
 		return nil
 	}
+	cachePath, err := updateCachePath()
+	if err != nil {
+		return fetchRelease(currentVersion)
+	}
+	if info := checkCachedUpdate(cachePath, currentVersion); info != nil {
+		return info
+	}
+	return fetchAndCache(cachePath, currentVersion)
+}
 
+func updateCachePath() (string, error) {
 	cacheDir, err := getCacheDir()
 	if err != nil {
-		return checkGitHubRelease(currentVersion)
+		return "", err
 	}
+	return filepath.Join(cacheDir, cacheFileName), nil
+}
 
-	cachePath := filepath.Join(cacheDir, cacheFileName)
+func checkCachedUpdate(cachePath, currentVersion string) *UpdateInfo {
 	cache, err := loadCache(cachePath)
-	if err == nil && time.Since(cache.LastCheck) < checkInterval {
-		return &UpdateInfo{
-			CurrentVersion: currentVersion,
-			LatestVersion:  cache.LatestVersion,
-			UpdateURL:      cache.UpdateURL,
-		}
+	if err != nil || time.Since(cache.LastCheck) >= checkInterval {
+		return nil
 	}
+	return &UpdateInfo{
+		CurrentVersion: currentVersion,
+		LatestVersion:  cache.LatestVersion,
+		UpdateURL:      cache.UpdateURL,
+	}
+}
 
-	info := checkGitHubRelease(currentVersion)
+func fetchAndCache(cachePath, currentVersion string) *UpdateInfo {
+	info := fetchRelease(currentVersion)
 	if info != nil {
 		saveCache(cachePath, &updateCache{
 			LastCheck:     time.Now(),
@@ -73,27 +78,14 @@ func CheckForUpdate(currentVersion string) *UpdateInfo {
 			UpdateURL:     info.UpdateURL,
 		})
 	}
-
 	return info
 }
 
-func checkGitHubRelease(currentVersion string) *UpdateInfo {
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(githubReleaseURL)
+func fetchRelease(currentVersion string) *UpdateInfo {
+	release, err := fetchLatestRelease()
 	if err != nil {
 		return nil
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil
-	}
-
-	var release githubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		return nil
-	}
-
 	return &UpdateInfo{
 		CurrentVersion: currentVersion,
 		LatestVersion:  release.TagName,
@@ -101,75 +93,20 @@ func checkGitHubRelease(currentVersion string) *UpdateInfo {
 	}
 }
 
-func getCacheDir() (string, error) {
-	configDir, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
-	}
-
-	cacheDir := filepath.Join(configDir, "feedme")
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
-		return "", err
-	}
-
-	return cacheDir, nil
-}
-
-func loadCache(path string) (*updateCache, error) {
-	data, err := os.ReadFile(path)
+func fetchLatestRelease() (*githubRelease, error) {
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(githubReleaseURL)
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 
-	var cache updateCache
-	if err := json.Unmarshal(data, &cache); err != nil {
-		return nil, err
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status: %d", resp.StatusCode)
 	}
-
-	return &cache, nil
-}
-
-func saveCache(path string, cache *updateCache) error {
-	data, err := json.Marshal(cache)
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(path, data, 0644)
-}
-
-// compareVersions compares two semantic version strings
-// Returns: 1 if v1 > v2, -1 if v1 < v2, 0 if equal
-func compareVersions(v1, v2 string) int {
-	v1 = strings.TrimPrefix(v1, "v")
-	v2 = strings.TrimPrefix(v2, "v")
-
-	parts1 := strings.Split(v1, ".")
-	parts2 := strings.Split(v2, ".")
-
-	maxLen := len(parts1)
-	if len(parts2) > maxLen {
-		maxLen = len(parts2)
-	}
-
-	for i := 0; i < maxLen; i++ {
-		var n1, n2 int
-		if i < len(parts1) {
-			n1, _ = strconv.Atoi(parts1[i])
-		}
-		if i < len(parts2) {
-			n2, _ = strconv.Atoi(parts2[i])
-		}
-
-		if n1 > n2 {
-			return 1
-		}
-		if n1 < n2 {
-			return -1
-		}
-	}
-
-	return 0
+	var release githubRelease
+	err = json.NewDecoder(resp.Body).Decode(&release)
+	return &release, err
 }
 
 // FormatUpdateMessage returns a formatted message for the status bar

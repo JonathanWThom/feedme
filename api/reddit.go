@@ -87,39 +87,18 @@ func (c *RedditClient) FetchStoryIDs(feed string) ([]int, error) {
 	return ids, nil
 }
 
+const redditUserAgent = "feedme:v1.0 (terminal news reader)"
+
 // fetchStories fetches stories from Reddit
 func (c *RedditClient) fetchStories(feed string) ([]*Item, error) {
 	c.Throttle()
 
 	url := fmt.Sprintf("https://www.reddit.com/r/%s/%s.json?limit=100", c.subreddit, feed)
-
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "feedme:v1.0 (terminal news reader)")
-
-	resp, err := c.http.Do(req)
+	resp, err := doWithRetry(c.http, url, redditUserAgent, &c.CachedSource)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch r/%s: %w", c.subreddit, err)
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode == 429 {
-		time.Sleep(2 * time.Second)
-		c.Throttle()
-		req, _ = http.NewRequest("GET", url, nil)
-		req.Header.Set("User-Agent", "feedme:v1.0 (terminal news reader)")
-		resp, err = c.http.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch r/%s after retry: %w", c.subreddit, err)
-		}
-		defer resp.Body.Close()
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("reddit returned status %d for r/%s", resp.StatusCode, c.subreddit)
-	}
 
 	var listing redditListing
 	if err := json.NewDecoder(resp.Body).Decode(&listing); err != nil {
@@ -138,32 +117,27 @@ func (c *RedditClient) FetchCommentTree(item *Item, maxDepth int) ([]*Comment, e
 		return nil, fmt.Errorf("no permalink available")
 	}
 
-	url := fmt.Sprintf("https://www.reddit.com%s.json?limit=200", permalink)
-
-	req, err := http.NewRequest("GET", url, nil)
+	listings, err := c.fetchCommentListings(permalink)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "feedme:v1.0 (terminal news reader)")
+	return parseRedditComments(listings[1], maxDepth)
+}
 
-	resp, err := c.http.Do(req)
+func (c *RedditClient) fetchCommentListings(permalink string) ([]redditCommentListing, error) {
+	url := fmt.Sprintf("https://www.reddit.com%s.json?limit=200", permalink)
+	resp, err := doWithRetry(c.http, url, redditUserAgent, &c.CachedSource)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch comments: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("reddit returned status %d", resp.StatusCode)
-	}
-
 	var listings []redditCommentListing
 	if err := json.NewDecoder(resp.Body).Decode(&listings); err != nil {
 		return nil, fmt.Errorf("failed to decode comments: %w", err)
 	}
-
 	if len(listings) < 2 {
 		return nil, fmt.Errorf("unexpected response format")
 	}
-
-	return parseRedditComments(listings[1], maxDepth)
+	return listings, nil
 }

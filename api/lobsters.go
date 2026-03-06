@@ -9,6 +9,7 @@ import (
 )
 
 const lobstersBaseURL = "https://lobste.rs"
+const lobstersUserAgent = "Mozilla/5.0 (compatible; hn-tui/1.0)"
 
 // Lobste.rs feed types (correspond to URL paths)
 const (
@@ -83,58 +84,24 @@ func (c *LobstersClient) FetchStoryIDs(feed string) ([]int, error) {
 // fetchStoriesPage fetches a single page of stories
 func (c *LobstersClient) fetchStoriesPage(feed string, page int) ([]*Item, error) {
 	c.Throttle()
-
-	var url string
-	if feed == "" {
-		if page == 1 {
-			url = lobstersBaseURL
-		} else {
-			url = fmt.Sprintf("%s/page/%d", lobstersBaseURL, page)
-		}
-	} else {
-		if page == 1 {
-			url = fmt.Sprintf("%s/%s", lobstersBaseURL, feed)
-		} else {
-			url = fmt.Sprintf("%s/%s/page/%d", lobstersBaseURL, feed, page)
-		}
-	}
-
-	req, err := http.NewRequest("GET", url, nil)
+	doc, err := c.fetchDocument(lobstersPageURL(feed, page))
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; hn-tui/1.0)")
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch lobste.rs page: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Handle rate limiting with retry
-	if resp.StatusCode == 429 {
-		resp.Body.Close()
-		time.Sleep(2 * time.Second)
-		c.Throttle()
-		req, _ = http.NewRequest("GET", url, nil)
-		req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; hn-tui/1.0)")
-		resp, err = c.http.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch lobste.rs page after retry: %w", err)
-		}
-		defer resp.Body.Close()
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("lobste.rs returned status %d", resp.StatusCode)
-	}
-
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse HTML: %w", err)
-	}
-
 	return parseLobstersStories(doc)
+}
+
+func lobstersPageURL(feed string, page int) string {
+	if feed == "" && page == 1 {
+		return lobstersBaseURL
+	}
+	if feed == "" {
+		return fmt.Sprintf("%s/page/%d", lobstersBaseURL, page)
+	}
+	if page == 1 {
+		return fmt.Sprintf("%s/%s", lobstersBaseURL, feed)
+	}
+	return fmt.Sprintf("%s/%s/page/%d", lobstersBaseURL, feed, page)
 }
 
 // FetchCommentTree fetches comments for a story
@@ -147,23 +114,18 @@ func (c *LobstersClient) FetchCommentTree(item *Item, maxDepth int) ([]*Comment,
 	}
 
 	url := fmt.Sprintf("%s/s/%s", lobstersBaseURL, shortID)
-
-	req, err := http.NewRequest("GET", url, nil)
+	doc, err := c.fetchDocument(url)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; hn-tui/1.0)")
+	return parseLobstersComments(doc)
+}
 
-	resp, err := c.http.Do(req)
+func (c *LobstersClient) fetchDocument(url string) (*goquery.Document, error) {
+	resp, err := doWithRetry(c.http, url, lobstersUserAgent, &c.CachedSource)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch story page: %w", err)
+		return nil, fmt.Errorf("failed to fetch page: %w", err)
 	}
 	defer resp.Body.Close()
-
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse HTML: %w", err)
-	}
-
-	return parseLobstersComments(doc)
+	return goquery.NewDocumentFromReader(resp.Body)
 }

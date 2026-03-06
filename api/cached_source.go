@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 )
@@ -74,4 +75,36 @@ func (c *CachedSource) FetchItems(ids []int) ([]*Item, error) {
 	}
 	c.cacheMu.RUnlock()
 	return items, nil
+}
+
+// doWithRetry makes an HTTP request, retrying once on 429 rate limiting.
+func doWithRetry(client *http.Client, url, userAgent string, cs *CachedSource) (*http.Response, error) {
+	resp, err := doRequest(client, url, userAgent)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != 429 {
+		return resp, nil
+	}
+	resp.Body.Close()
+	time.Sleep(2 * time.Second)
+	cs.Throttle()
+	return doRequest(client, url, userAgent)
+}
+
+func doRequest(client *http.Client, url, userAgent string) (*http.Response, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != 200 && resp.StatusCode != 429 {
+		resp.Body.Close()
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	return resp, nil
 }

@@ -24,39 +24,56 @@ func parseLobstersStories(doc *goquery.Document) ([]*Item, error) {
 
 // parseLobstersStory extracts a single story from an HTML element
 func parseLobstersStory(s *goquery.Selection) *Item {
-	item := &Item{
-		Type: "story",
-	}
+	item := &Item{Type: "story"}
 
-	// Get story link and title
+	parseLobstersTitle(s, item)
+	parseLobstersShortID(s, item)
+	parseLobstersScore(s, item)
+	parseLobstersAuthor(s, item)
+	parseLobstersTime(s.Find(".byline time"), item)
+	parseLobstersCommentCount(s, item)
+	parseLobstersTags(s, item)
+
+	if item.Title == "" {
+		return nil
+	}
+	return item
+}
+
+func parseLobstersTitle(s *goquery.Selection, item *Item) {
 	linkSel := s.Find("a.u-url")
 	if linkSel.Length() == 0 {
 		linkSel = s.Find(".link a").First()
 	}
-	if linkSel.Length() > 0 {
-		item.Title = strings.TrimSpace(linkSel.Text())
-		item.URL, _ = linkSel.Attr("href")
-		if strings.HasPrefix(item.URL, "/") {
-			item.URL = lobstersBaseURL + item.URL
-		}
+	if linkSel.Length() == 0 {
+		return
 	}
+	item.Title = strings.TrimSpace(linkSel.Text())
+	item.URL, _ = linkSel.Attr("href")
+	if strings.HasPrefix(item.URL, "/") {
+		item.URL = lobstersBaseURL + item.URL
+	}
+}
 
-	// Get short ID from the data attribute
+func parseLobstersShortID(s *goquery.Selection, item *Item) {
 	if shortID, exists := s.Attr("data-shortid"); exists {
 		item.Type = shortID
 		item.ID = hashShortID(shortID)
 	}
+}
 
-	// Get score
+func parseLobstersScore(s *goquery.Selection, item *Item) {
 	scoreSel := s.Find(".voters a.upvoter")
-	if scoreSel.Length() > 0 {
-		scoreText := strings.TrimSpace(scoreSel.Text())
-		if score, err := strconv.Atoi(scoreText); err == nil {
-			item.Score = score
-		}
+	if scoreSel.Length() == 0 {
+		return
 	}
+	scoreText := strings.TrimSpace(scoreSel.Text())
+	if score, err := strconv.Atoi(scoreText); err == nil {
+		item.Score = score
+	}
+}
 
-	// Get author
+func parseLobstersAuthor(s *goquery.Selection, item *Item) {
 	authorSel := s.Find(".byline a.u-author")
 	if authorSel.Length() == 0 {
 		authorSel = s.Find(".byline a[href^='/~']")
@@ -64,23 +81,23 @@ func parseLobstersStory(s *goquery.Selection) *Item {
 	if authorSel.Length() > 0 {
 		item.By = strings.TrimSpace(authorSel.Text())
 	}
+}
 
-	// Get time
-	parseLobstersTime(s.Find(".byline time"), item)
-
-	// Get comment count
+func parseLobstersCommentCount(s *goquery.Selection, item *Item) {
 	commentSel := s.Find(".comments_label")
-	if commentSel.Length() > 0 {
-		commentText := strings.TrimSpace(commentSel.Text())
-		re := regexp.MustCompile(`(\d+)`)
-		if matches := re.FindStringSubmatch(commentText); len(matches) > 1 {
-			if count, err := strconv.Atoi(matches[1]); err == nil {
-				item.Descendants = count
-			}
+	if commentSel.Length() == 0 {
+		return
+	}
+	commentText := strings.TrimSpace(commentSel.Text())
+	re := regexp.MustCompile(`(\d+)`)
+	if matches := re.FindStringSubmatch(commentText); len(matches) > 1 {
+		if count, err := strconv.Atoi(matches[1]); err == nil {
+			item.Descendants = count
 		}
 	}
+}
 
-	// Get tags
+func parseLobstersTags(s *goquery.Selection, item *Item) {
 	var tags []string
 	s.Find(".tags a.tag").Each(func(i int, tagSel *goquery.Selection) {
 		tag := strings.TrimSpace(tagSel.Text())
@@ -91,12 +108,6 @@ func parseLobstersStory(s *goquery.Selection) *Item {
 	if len(tags) > 0 {
 		item.Text = "[" + strings.Join(tags, ", ") + "]"
 	}
-
-	if item.Title == "" {
-		return nil
-	}
-
-	return item
 }
 
 // parseLobstersComments extracts comments from a story page
@@ -115,27 +126,31 @@ func parseLobstersComments(doc *goquery.Document) ([]*Comment, error) {
 
 // parseLobstersComment extracts a single comment
 func parseLobstersComment(s *goquery.Selection) *Comment {
-	item := &Item{
-		Type: "comment",
-	}
+	item := &Item{Type: "comment"}
 
-	// Get author
-	authorSel := s.Find(".byline a[href^='/~']")
-	if authorSel.Length() > 0 {
-		item.By = strings.TrimSpace(authorSel.Text())
-	}
+	parseLobstersAuthor(s, item)
+	parseLobstersCommentText(s, item)
+	parseLobstersTime(s.Find(".byline time"), item)
+	parseLobstersScore(s, item)
 
-	// Get comment text
+	if item.By == "" && item.Text == "" {
+		return nil
+	}
+	return &Comment{
+		Item:  item,
+		Depth: parseLobstersDepth(s),
+	}
+}
+
+func parseLobstersCommentText(s *goquery.Selection, item *Item) {
 	textSel := s.Find(".comment_text")
 	if textSel.Length() > 0 {
 		html, _ := textSel.Html()
 		item.Text = html
 	}
+}
 
-	// Get time
-	parseLobstersTime(s.Find(".byline time"), item)
-
-	// Get depth by counting parent ol.comments elements
+func parseLobstersDepth(s *goquery.Selection) int {
 	depth := 0
 	s.Parents().Each(func(i int, parent *goquery.Selection) {
 		if parent.Is("ol.comments") {
@@ -145,24 +160,7 @@ func parseLobstersComment(s *goquery.Selection) *Comment {
 	if depth > 0 {
 		depth--
 	}
-
-	// Get score
-	scoreSel := s.Find(".voters a.upvoter")
-	if scoreSel.Length() > 0 {
-		scoreText := strings.TrimSpace(scoreSel.Text())
-		if score, err := strconv.Atoi(scoreText); err == nil {
-			item.Score = score
-		}
-	}
-
-	if item.By == "" && item.Text == "" {
-		return nil
-	}
-
-	return &Comment{
-		Item:  item,
-		Depth: depth,
-	}
+	return depth
 }
 
 // parseLobstersTime extracts time from a Lobsters time element into an Item
@@ -180,4 +178,3 @@ func parseLobstersTime(timeSel *goquery.Selection, item *Item) {
 		item.Time = parseRelativeTime(timeText)
 	}
 }
-

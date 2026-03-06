@@ -56,29 +56,29 @@ type redditComment struct {
 func parseRedditStories(listing redditListing) []*Item {
 	var stories []*Item
 	for _, child := range listing.Data.Children {
-		post := child.Data
-		item := &Item{
-			ID:          hashShortID(post.ID),
-			Type:        post.Permalink,
-			Title:       post.Title,
-			By:          post.Author,
-			Score:       post.Score,
-			URL:         post.URL,
-			Time:        int64(post.CreatedUTC),
-			Descendants: post.NumComments,
-		}
-
-		if post.LinkFlairText != "" {
-			item.Text = "[" + post.LinkFlairText + "]"
-		}
-
-		if post.IsSelf {
-			item.URL = fmt.Sprintf("https://www.reddit.com%s", post.Permalink)
-		}
-
-		stories = append(stories, item)
+		stories = append(stories, redditPostToItem(child.Data))
 	}
 	return stories
+}
+
+func redditPostToItem(post redditPost) *Item {
+	item := &Item{
+		ID:          hashShortID(post.ID),
+		Type:        post.Permalink,
+		Title:       post.Title,
+		By:          post.Author,
+		Score:       post.Score,
+		URL:         post.URL,
+		Time:        int64(post.CreatedUTC),
+		Descendants: post.NumComments,
+	}
+	if post.LinkFlairText != "" {
+		item.Text = "[" + post.LinkFlairText + "]"
+	}
+	if post.IsSelf {
+		item.URL = fmt.Sprintf("https://www.reddit.com%s", post.Permalink)
+	}
+	return item
 }
 
 // parseRedditComments extracts comments from the listing
