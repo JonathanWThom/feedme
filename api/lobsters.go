@@ -6,7 +6,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -26,35 +25,18 @@ var LobstersFeedLabels = []string{"Hot", "New", "Recent"}
 
 // LobstersClient scrapes lobste.rs
 type LobstersClient struct {
-	http        *http.Client
-	storyCache  map[int]*Item
-	cacheMu     sync.RWMutex
-	lastRequest time.Time
-	requestMu   sync.Mutex
+	CachedSource
+	http *http.Client
 }
 
 // NewLobstersClient creates a new Lobste.rs scraping client
 func NewLobstersClient() *LobstersClient {
 	return &LobstersClient{
+		CachedSource: NewCachedSource(500 * time.Millisecond),
 		http: &http.Client{
 			Timeout: 15 * time.Second,
 		},
-		storyCache: make(map[int]*Item),
 	}
-}
-
-// throttle ensures we don't make requests too quickly
-func (c *LobstersClient) throttle() {
-	c.requestMu.Lock()
-	defer c.requestMu.Unlock()
-
-	// Wait at least 500ms between requests to be polite
-	minDelay := 500 * time.Millisecond
-	elapsed := time.Since(c.lastRequest)
-	if elapsed < minDelay {
-		time.Sleep(minDelay - elapsed)
-	}
-	c.lastRequest = time.Now()
 }
 
 // Name returns the display name of the source
@@ -102,25 +84,13 @@ func (c *LobstersClient) FetchStoryIDs(feed string) ([]int, error) {
 		return nil, fmt.Errorf("no stories found for feed %q", feed)
 	}
 
-	// Cache stories and return pseudo-IDs
-	ids := make([]int, len(allStories))
-	c.cacheMu.Lock()
-	// Clear old cache
-	c.storyCache = make(map[int]*Item)
-	for i, story := range allStories {
-		id := i + 1 // 1-indexed pseudo-IDs
-		c.storyCache[id] = story
-		ids[i] = id
-	}
-	c.cacheMu.Unlock()
-
-	return ids, nil
+	return c.StoreItems(allStories), nil
 }
 
 // fetchStoriesPage fetches a single page of stories
 func (c *LobstersClient) fetchStoriesPage(feed string, page int) ([]*Item, error) {
 	// Throttle requests to avoid rate limiting
-	c.throttle()
+	c.Throttle()
 
 	var url string
 	if feed == "" {
@@ -153,7 +123,7 @@ func (c *LobstersClient) fetchStoriesPage(feed string, page int) ([]*Item, error
 	if resp.StatusCode == 429 {
 		resp.Body.Close()
 		time.Sleep(2 * time.Second) // Wait 2 seconds and retry
-		c.throttle()
+		c.Throttle()
 		req, _ = http.NewRequest("GET", url, nil)
 		req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; hn-tui/1.0)")
 		resp, err = c.http.Do(req)
@@ -284,36 +254,11 @@ func (c *LobstersClient) parseStory(s *goquery.Selection) *Item {
 	return item
 }
 
-// FetchItem fetches a cached item by pseudo-ID
-func (c *LobstersClient) FetchItem(id int) (*Item, error) {
-	c.cacheMu.RLock()
-	item, ok := c.storyCache[id]
-	c.cacheMu.RUnlock()
-
-	if !ok {
-		return nil, fmt.Errorf("item %d not found in cache", id)
-	}
-
-	return item, nil
-}
-
-// FetchItems fetches multiple cached items by pseudo-ID
-func (c *LobstersClient) FetchItems(ids []int) ([]*Item, error) {
-	items := make([]*Item, len(ids))
-	c.cacheMu.RLock()
-	for i, id := range ids {
-		if item, ok := c.storyCache[id]; ok {
-			items[i] = item
-		}
-	}
-	c.cacheMu.RUnlock()
-	return items, nil
-}
 
 // FetchCommentTree fetches comments for a story
 func (c *LobstersClient) FetchCommentTree(item *Item, maxDepth int) ([]*Comment, error) {
 	// Throttle requests to avoid rate limiting
-	c.throttle()
+	c.Throttle()
 
 	// Get the short ID from the Type field
 	shortID := item.Type

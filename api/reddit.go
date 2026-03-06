@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -23,13 +22,10 @@ var RedditFeedLabels = []string{"Hot", "New", "Top", "Rising", "Best"}
 
 // RedditClient fetches data from Reddit's JSON API
 type RedditClient struct {
-	http        *http.Client
-	subreddit   string
-	storyCache  map[int]*Item
-	idToReddit  map[int]string // Maps pseudo-ID to Reddit post ID
-	cacheMu     sync.RWMutex
-	lastRequest time.Time
-	requestMu   sync.Mutex
+	CachedSource
+	http       *http.Client
+	subreddit  string
+	idToReddit map[int]string // Maps pseudo-ID to Reddit post ID
 }
 
 // NewRedditClient creates a new Reddit API client for a subreddit
@@ -39,27 +35,13 @@ func NewRedditClient(subreddit string) *RedditClient {
 	subreddit = strings.TrimPrefix(subreddit, "/r/")
 
 	return &RedditClient{
+		CachedSource: NewCachedSource(1 * time.Second),
 		http: &http.Client{
 			Timeout: 15 * time.Second,
 		},
 		subreddit:  subreddit,
-		storyCache: make(map[int]*Item),
 		idToReddit: make(map[int]string),
 	}
-}
-
-// throttle ensures we don't make requests too quickly
-func (c *RedditClient) throttle() {
-	c.requestMu.Lock()
-	defer c.requestMu.Unlock()
-
-	// Wait at least 1 second between requests (Reddit rate limits)
-	minDelay := 1 * time.Second
-	elapsed := time.Since(c.lastRequest)
-	if elapsed < minDelay {
-		time.Sleep(minDelay - elapsed)
-	}
-	c.lastRequest = time.Now()
 }
 
 // Name returns the display name of the source
@@ -123,26 +105,20 @@ func (c *RedditClient) FetchStoryIDs(feed string) ([]int, error) {
 		return nil, fmt.Errorf("no stories found for r/%s/%s", c.subreddit, feed)
 	}
 
-	// Cache stories and return pseudo-IDs
-	ids := make([]int, len(stories))
-	c.cacheMu.Lock()
-	// Clear old cache
-	c.storyCache = make(map[int]*Item)
+	ids := c.StoreItems(stories)
+
+	// Build Reddit ID mapping
 	c.idToReddit = make(map[int]string)
 	for i, story := range stories {
-		id := i + 1 // 1-indexed pseudo-IDs
-		c.storyCache[id] = story
-		c.idToReddit[id] = story.Type // Store Reddit ID (stored in Type field temporarily)
-		ids[i] = id
+		c.idToReddit[i+1] = story.Type
 	}
-	c.cacheMu.Unlock()
 
 	return ids, nil
 }
 
 // fetchStories fetches stories from Reddit
 func (c *RedditClient) fetchStories(feed string) ([]*Item, error) {
-	c.throttle()
+	c.Throttle()
 
 	url := fmt.Sprintf("https://www.reddit.com/r/%s/%s.json?limit=100", c.subreddit, feed)
 
@@ -162,7 +138,7 @@ func (c *RedditClient) fetchStories(feed string) ([]*Item, error) {
 	if resp.StatusCode == 429 {
 		// Rate limited, wait and retry
 		time.Sleep(2 * time.Second)
-		c.throttle()
+		c.Throttle()
 		req, _ = http.NewRequest("GET", url, nil)
 		req.Header.Set("User-Agent", "feedme:v1.0 (terminal news reader)")
 		resp, err = c.http.Do(req)
@@ -211,31 +187,6 @@ func (c *RedditClient) fetchStories(feed string) ([]*Item, error) {
 	return stories, nil
 }
 
-// FetchItem fetches a cached item by pseudo-ID
-func (c *RedditClient) FetchItem(id int) (*Item, error) {
-	c.cacheMu.RLock()
-	item, ok := c.storyCache[id]
-	c.cacheMu.RUnlock()
-
-	if !ok {
-		return nil, fmt.Errorf("item %d not found in cache", id)
-	}
-
-	return item, nil
-}
-
-// FetchItems fetches multiple cached items by pseudo-ID
-func (c *RedditClient) FetchItems(ids []int) ([]*Item, error) {
-	items := make([]*Item, len(ids))
-	c.cacheMu.RLock()
-	for i, id := range ids {
-		if item, ok := c.storyCache[id]; ok {
-			items[i] = item
-		}
-	}
-	c.cacheMu.RUnlock()
-	return items, nil
-}
 
 // redditCommentListing represents the comments JSON structure
 type redditCommentListing struct {
@@ -260,7 +211,7 @@ type redditComment struct {
 
 // FetchCommentTree fetches comments for a story
 func (c *RedditClient) FetchCommentTree(item *Item, maxDepth int) ([]*Comment, error) {
-	c.throttle()
+	c.Throttle()
 
 	// Get the permalink from the Type field
 	permalink := item.Type
